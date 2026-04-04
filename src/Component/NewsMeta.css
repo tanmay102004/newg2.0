@@ -1,0 +1,28 @@
+.news-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 34px;
+  align-items: center;
+  padding: 16px 28px;
+  border-bottom: 1px solid #ebeff5;
+  color: #475569;
+}
+
+.news-meta__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.98rem;
+}
+
+.news-meta__item svg {
+  width: 18px;
+  height: 18px;
+  fill: #ef3d31;
+}
+
+@media (max-width: 860px) {
+  .news-meta {
+    padding-inline: 18px;
+  }
+}

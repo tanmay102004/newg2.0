@@ -1,0 +1,120 @@
+.ad-banner {
+  padding-inline: 28px;
+}
+
+.ad-banner--wide {
+  padding-top: 18px;
+  padding-bottom: 14px;
+}
+
+.ad-banner--square {
+  padding-top: 18px;
+  padding-bottom: 34px;
+}
+
+.ad-banner__surface {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  color: #ffffff;
+  background:
+    linear-gradient(135deg, rgba(8, 15, 29, 0.52), rgba(8, 15, 29, 0.28)),
+    linear-gradient(180deg, #5f6670 0%, #2b3440 100%);
+}
+
+.ad-banner--wide .ad-banner__surface {
+  max-width: 920px;
+  margin: 0 auto;
+  min-height: 118px;
+}
+
+.ad-banner--square .ad-banner__surface {
+  max-width: 340px;
+  min-height: 300px;
+  margin-left: auto;
+}
+
+.ad-banner__content {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  height: 100%;
+  padding: 42px 24px 20px;
+}
+
+.ad-banner--square .ad-banner__content {
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 50px 22px 22px;
+}
+
+.ad-banner__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 560px;
+}
+
+.ad-banner__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.ad-banner--square .ad-banner__title {
+  font-size: 1.4rem;
+}
+
+.ad-banner__subtitle,
+.ad-banner__slot {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.95rem;
+}
+
+.ad-banner__slot {
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.ad-banner__button {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 168px;
+  padding: 14px 20px;
+  background: #ef3d31;
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.ad-banner--square .ad-banner__button {
+  align-self: flex-start;
+}
+
+@media (max-width: 860px) {
+  .ad-banner {
+    padding-inline: 18px;
+  }
+
+  .ad-banner--square .ad-banner__surface {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .ad-banner__content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ad-banner__button {
+    align-self: flex-start;
+  }
+}

@@ -1,0 +1,14 @@
+.news-page {
+  width: min(1490px, calc(100% - 32px));
+  margin: 18px auto 40px;
+  background: #ffffff;
+  border: 1px solid #d9dfe8;
+  box-shadow: 0 18px 50px rgba(17, 24, 39, 0.08);
+}
+
+@media (max-width: 860px) {
+  .news-page {
+    width: min(100%, calc(100% - 20px));
+    margin-inline: auto;
+  }
+}
