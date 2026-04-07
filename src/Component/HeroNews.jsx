@@ -1,4 +1,5 @@
 import './HeroNews.css'
+import { getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
 
 function LiveBadge({ label }) {
   return (
@@ -35,8 +36,10 @@ function StoryMedia({ story, large = false }) {
 }
 
 function SecondaryStory({ story }) {
-  return (
-    <article className="hero-news__story-card" key={story.id}>
+  const href = story.type === 'video' ? '' : resolveArticleHref(story)
+  const linkBehavior = getLinkBehavior(href)
+  const cardBody = (
+    <>
       <StoryMedia story={story} />
       <div className="hero-news__story-content">
         {story.type === 'live' ? <LiveBadge label={story.liveLabel} /> : null}
@@ -44,23 +47,48 @@ function SecondaryStory({ story }) {
         {story.summary ? <p className="hero-news__story-summary">{story.summary}</p> : null}
         {story.time ? <p className="hero-news__story-time">{story.time}</p> : null}
       </div>
-    </article>
+    </>
+  )
+
+  if (!href) {
+    return (
+      <article className="hero-news__story-card" key={story.id}>
+        {cardBody}
+      </article>
+    )
+  }
+
+  return (
+    <a className="hero-news__story-card" href={href} {...linkBehavior}>
+      {cardBody}
+    </a>
   )
 }
 
 function HeroNews({ ariaLabel, content }) {
   const { leadStory, sideStories } = content
+  const leadHref = leadStory.type === 'video' ? '' : resolveArticleHref(leadStory)
+  const leadLinkBehavior = getLinkBehavior(leadHref)
+  const leadBody = (
+    <>
+      <StoryMedia story={leadStory} large />
+      <div className="hero-news__lead-content">
+        <h1 className="hero-news__lead-title">{leadStory.title}</h1>
+        <p className="hero-news__lead-summary">{leadStory.summary}</p>
+        <p className="hero-news__story-time">{leadStory.time}</p>
+      </div>
+    </>
+  )
 
   return (
     <section className="hero-news" aria-label={ariaLabel}>
-      <article className="hero-news__lead">
-        <StoryMedia story={leadStory} large />
-        <div className="hero-news__lead-content">
-          <h1 className="hero-news__lead-title">{leadStory.title}</h1>
-          <p className="hero-news__lead-summary">{leadStory.summary}</p>
-          <p className="hero-news__story-time">{leadStory.time}</p>
-        </div>
-      </article>
+      {leadHref ? (
+        <a className="hero-news__lead" href={leadHref} {...leadLinkBehavior}>
+          {leadBody}
+        </a>
+      ) : (
+        <article className="hero-news__lead">{leadBody}</article>
+      )}
 
       <div className="hero-news__grid">
         {sideStories.map((story) => (

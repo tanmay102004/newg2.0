@@ -55,7 +55,10 @@ function normalizeShortItem(item = {}) {
     item.id ??
       item.shortId ??
       item.videoId ??
+      item.youtubeId ??
       extractYouTubeId(item.watchUrl) ??
+      extractYouTubeId(item.shortUrl) ??
+      extractYouTubeId(item.youtubeUrl) ??
       extractYouTubeId(item.url) ??
       extractYouTubeId(item.embedUrl) ??
       '',
@@ -74,14 +77,18 @@ function normalizeShortItem(item = {}) {
     line: item.line ?? item.summary ?? item.description ?? item.excerpt ?? '',
     watchUrl:
       item.watchUrl ??
-      item.url ??
       item.shortUrl ??
+      item.youtubeUrl ??
+      item.url ??
       (id ? `https://www.youtube.com/shorts/${id}` : ''),
     embedUrl,
     thumbnailUrl:
       item.thumbnailUrl ??
       item.thumbnail ??
       item.poster ??
+      item.posterUrl ??
+      item.imageUrl ??
+      item.coverImageUrl ??
       item.image ??
       (id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : ''),
   }
@@ -93,9 +100,9 @@ function normalizeShortsSectionContent(content = {}) {
     tickerAriaLabel: content.tickerAriaLabel ?? content.stripAriaLabel ?? 'शॉर्ट अपडेट',
     tickerStories: content.tickerStories ?? content.stripStories ?? [],
     heading: content.heading ?? 'शॉर्ट वीडियो',
-    channelUrl: content.channelUrl ?? content.shortsUrl ?? '#',
+    channelUrl: content.channelUrl ?? content.shortsUrl ?? content.sourceUrl ?? '#',
     channelLabel: content.channelLabel ?? 'सभी शॉर्ट्स देखें',
-    items: (content.items ?? content.shorts ?? []).map(normalizeShortItem).filter((item) => item.id),
+    items: (content.items ?? content.shorts ?? content.videos ?? []).map(normalizeShortItem).filter((item) => item.id),
   }
 }
 
@@ -127,10 +134,6 @@ function ShortsCard({ item, isPlaying, onPlay }) {
             </span>
           </button>
         )}
-      </div>
-      <div className="shorts-section__copy">
-        <h3>{item.title}</h3>
-        {item.line ? <p>{item.line}</p> : null}
       </div>
     </article>
   )

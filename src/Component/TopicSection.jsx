@@ -1,4 +1,5 @@
 import './TopicSection.css'
+import { getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
 
 function MetaRow({ author, date }) {
   return (
@@ -40,8 +41,11 @@ function StoryImage({ story, featured = false }) {
 }
 
 function FeaturedStory({ story }) {
+  const href = resolveArticleHref(story)
+  const linkBehavior = getLinkBehavior(href)
+
   return (
-    <article className="topic-section__featured-story">
+    <a className="topic-section__featured-story" href={href} {...linkBehavior}>
       <StoryImage story={story} featured />
       <div className="topic-section__featured-content">
         <div className="topic-section__featured-copy">
@@ -50,19 +54,22 @@ function FeaturedStory({ story }) {
           <MetaRow author={story.author} date={story.date} />
         </div>
       </div>
-    </article>
+    </a>
   )
 }
 
 function CompactStory({ story }) {
+  const href = resolveArticleHref(story)
+  const linkBehavior = getLinkBehavior(href)
+
   return (
-    <article className="topic-section__compact-story">
+    <a className="topic-section__compact-story" href={href} {...linkBehavior}>
       <StoryImage story={story} />
       <div className="topic-section__compact-content">
         <h4 className="topic-section__compact-title">{story.title}</h4>
         <MetaRow author={story.author} date={story.date} />
       </div>
-    </article>
+    </a>
   )
 }
 

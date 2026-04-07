@@ -1,0 +1,129 @@
+.feature-band {
+  margin: 24px 0 28px;
+  padding: 0 28px;
+}
+
+.feature-band__inner {
+  padding: 34px 28px 32px;
+  background: #134d9d;
+}
+
+.feature-band__heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.feature-band__accent {
+  width: 4px;
+  height: 32px;
+  background: #69d1ff;
+  border-radius: 999px;
+}
+
+.feature-band__heading h2 {
+  margin: 0;
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 2.1rem;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.feature-band__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+}
+
+.feature-band__card {
+  display: grid;
+  grid-template-columns: 1.02fr 1fr;
+  gap: 20px;
+  align-items: start;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.feature-band__media {
+  overflow: hidden;
+  border-radius: 14px;
+  aspect-ratio: 16 / 11;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.15), transparent 45%),
+    linear-gradient(180deg, #4379c0 0%, #244c85 100%);
+}
+
+.feature-band__media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.feature-band__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.feature-band__copy h3 {
+  margin: 0;
+  font-size: 1.18rem;
+  line-height: 1.38;
+  font-weight: 700;
+}
+
+.feature-band__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: #6fe6ff;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.feature-band__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.feature-band__meta svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 1180px) {
+  .feature-band__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .feature-band__card {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  .feature-band {
+    padding: 0 18px;
+  }
+
+  .feature-band__inner {
+    padding: 24px 18px;
+  }
+
+  .feature-band__card {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .feature-band__heading h2 {
+    font-size: 1.8rem;
+  }
+}

@@ -1,6 +1,6 @@
 .news-page {
   width: min(1490px, calc(100% - 32px));
-  margin: 18px auto 40px;
+  margin: 10px auto 32px;
   background: #ffffff;
   border: 1px solid #d9dfe8;
   box-shadow: 0 18px 50px rgba(17, 24, 39, 0.08);

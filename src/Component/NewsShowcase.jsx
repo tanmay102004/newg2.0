@@ -1,4 +1,5 @@
 import './NewsShowcase.css'
+import { getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
 
 function IconX() {
   return (
@@ -67,50 +68,62 @@ function CardImage({ story, featured = false }) {
 }
 
 function OverlayCard({ story }) {
+  const href = resolveArticleHref(story)
+  const linkBehavior = getLinkBehavior(href)
+
   return (
-    <article className="news-showcase__featured-card">
+    <a className="news-showcase__featured-card" href={href} {...linkBehavior}>
       <CardImage story={story} featured />
       <div className="news-showcase__featured-content">
         <TagList tags={story.tags} />
         <h3 className="news-showcase__featured-title">{story.title}</h3>
         <MetaRow author={story.author} date={story.date} />
       </div>
-    </article>
+    </a>
   )
 }
 
 function InlineCard({ story }) {
+  const href = resolveArticleHref(story)
+  const linkBehavior = getLinkBehavior(href)
+
   return (
-    <article className="news-showcase__inline-card">
+    <a className="news-showcase__inline-card" href={href} {...linkBehavior}>
       <CardImage story={story} />
       <div className="news-showcase__inline-content">
         <TagList tags={story.tags} />
         <h3 className="news-showcase__inline-title">{story.title}</h3>
         <MetaRow author={story.author} date={story.date} />
       </div>
-    </article>
+    </a>
   )
 }
 
 function SidebarCard({ story }) {
+  const href = resolveArticleHref(story)
+  const linkBehavior = getLinkBehavior(href)
+
   return (
-    <article className="news-showcase__sidebar-feature">
+    <a className="news-showcase__sidebar-feature" href={href} {...linkBehavior}>
       <CardImage story={story} featured />
       <div className="news-showcase__sidebar-feature-content">
         <TagList tags={story.tags} />
         <h3 className="news-showcase__sidebar-feature-title">{story.title}</h3>
         <MetaRow author={story.author} date={story.date} />
       </div>
-    </article>
+    </a>
   )
 }
 
 function SidebarListItem({ story }) {
+  const href = resolveArticleHref(story)
+  const linkBehavior = getLinkBehavior(href)
+
   return (
-    <article className="news-showcase__sidebar-item">
+    <a className="news-showcase__sidebar-item" href={href} {...linkBehavior}>
       <h4 className="news-showcase__sidebar-item-title">{story.title}</h4>
       <MetaRow author={story.author} date={story.date} />
-    </article>
+    </a>
   )
 }
 

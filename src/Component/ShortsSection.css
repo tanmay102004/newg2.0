@@ -8,7 +8,7 @@
 }
 
 .shorts-section__shell {
-  padding: 24px 28px 30px;
+  padding: 22px 28px 26px;
 }
 
 .shorts-section__header {
@@ -16,7 +16,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 18px;
+  margin-bottom: 22px;
 }
 
 .shorts-section__title-block {
@@ -60,8 +60,8 @@
 .shorts-section__rail {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(190px, 220px);
-  gap: 16px;
+  grid-auto-columns: minmax(210px, 238px);
+  gap: 8px;
   overflow-x: auto;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
@@ -112,15 +112,17 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 22px;
-  background: #07121f;
-  box-shadow: 0 24px 44px rgba(15, 23, 42, 0.22);
+  border-radius: 18px;
+  background: transparent;
+  box-shadow: none;
 }
 
 .shorts-section__media {
   position: relative;
   aspect-ratio: 9 / 16;
   background: #0f172a;
+  border-radius: 18px;
+  overflow: hidden;
 }
 
 .shorts-section__media iframe,
@@ -150,12 +152,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 72px;
-  height: 52px;
-  border-radius: 16px;
+  width: 76px;
+  height: 56px;
+  border-radius: 18px;
   background: rgba(239, 68, 68, 0.94);
   transform: translate(-50%, -50%);
   box-shadow: 0 18px 28px rgba(15, 23, 42, 0.32);
+  opacity: 0;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    background-color 180ms ease;
 }
 
 .shorts-section__play svg {
@@ -164,23 +171,11 @@
   fill: #ffffff;
 }
 
-.shorts-section__copy {
-  padding: 14px 14px 18px;
-  color: #ffffff;
-}
-
-.shorts-section__copy h3 {
-  margin: 0 0 10px;
-  font-size: 1.02rem;
-  line-height: 1.32;
-  font-weight: 700;
-}
-
-.shorts-section__copy p {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.82rem;
-  line-height: 1.46;
+.shorts-section__poster:hover .shorts-section__play,
+.shorts-section__poster:focus-visible .shorts-section__play {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.04);
+  background: rgba(239, 68, 68, 1);
 }
 
 @media (max-width: 860px) {
@@ -198,6 +193,6 @@
   }
 
   .shorts-section__rail {
-    grid-auto-columns: minmax(176px, 190px);
+    grid-auto-columns: minmax(176px, 198px);
   }
 }

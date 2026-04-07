@@ -43,6 +43,12 @@
   align-items: start;
 }
 
+a.topic-section__featured-story,
+a.topic-section__compact-story {
+  color: inherit;
+  text-decoration: none;
+}
+
 .topic-section__featured-content,
 .topic-section__compact-content {
   display: flex;

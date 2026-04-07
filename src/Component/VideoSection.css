@@ -104,6 +104,11 @@
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.28);
   pointer-events: none;
   z-index: 2;
+  opacity: 0;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    background-color 180ms ease;
 }
 
 .video-section__poster-play svg {
@@ -255,6 +260,11 @@
   border-radius: 999px;
   background: rgba(239, 68, 68, 0.92);
   transform: translate(-50%, -50%);
+  opacity: 0;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    background-color 160ms ease;
 }
 
 .video-section__thumb-overlay svg {
@@ -332,6 +342,19 @@
 .video-section__item-link:hover,
 .video-section__item-title-button:hover {
   color: #ffffff;
+}
+
+.video-section__poster:hover .video-section__poster-play,
+.video-section__poster:focus-visible .video-section__poster-play,
+.video-section__item-card:hover .video-section__thumb-overlay,
+.video-section__item-card:focus-visible .video-section__thumb-overlay {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.04);
+}
+
+.video-section__poster:hover .video-section__poster-play,
+.video-section__item-card:hover .video-section__thumb-overlay {
+  background: rgba(239, 68, 68, 1);
 }
 
 @media (max-width: 1180px) {
