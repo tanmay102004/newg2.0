@@ -1,14 +1,26 @@
 import { defaultArticlePages } from '../data/articlePages'
 import { homePageContent } from '../data/homePageContent'
+import { applyHomepagePlacements } from './homepagePlacements'
+import { getPublishedStorySubmissions } from './storySubmissions'
 
 const CONTENT_API_URL = import.meta.env.VITE_CONTENT_API_URL?.trim()
 
+function buildResolvedHomePageContent(baseContent, remoteContent = {}) {
+  const mergedContent = {
+    ...baseContent,
+    ...remoteContent,
+    articlePages: {
+      ...defaultArticlePages,
+      ...(remoteContent.articlePages ?? {}),
+    },
+  }
+
+  return applyHomepagePlacements(mergedContent, getPublishedStorySubmissions())
+}
+
 export async function loadHomePageContent() {
   if (!CONTENT_API_URL) {
-    return {
-      ...homePageContent,
-      articlePages: defaultArticlePages,
-    }
+    return buildResolvedHomePageContent(homePageContent)
   }
 
   const response = await fetch(CONTENT_API_URL, {
@@ -23,14 +35,7 @@ export async function loadHomePageContent() {
 
   const remoteContent = await response.json()
 
-  return {
-    ...homePageContent,
-    ...remoteContent,
-    articlePages: {
-      ...defaultArticlePages,
-      ...(remoteContent.articlePages ?? {}),
-    },
-  }
+  return buildResolvedHomePageContent(homePageContent, remoteContent)
 }
 
 export { CONTENT_API_URL, homePageContent }

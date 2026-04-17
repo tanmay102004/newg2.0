@@ -1,4 +1,5 @@
 import './WhatsAppPromo.css'
+import qrCodeImage from '../assets/My_QR_Code_1-1024.jpeg'
 
 function WhatsAppPromo({ content }) {
   if (!content?.href) {
@@ -6,14 +7,16 @@ function WhatsAppPromo({ content }) {
   }
 
   return (
-    <section className="whatsapp-promo" aria-label={content.ariaLabel ?? 'व्हाट्सऐप चैनल प्रमोशन'}>
+    <section className="whatsapp-promo" aria-label={content.ariaLabel ?? 'WhatsApp channel promotion'}>
       <a className="whatsapp-promo__surface" href={content.href} target="_blank" rel="noreferrer">
         <div className="whatsapp-promo__badge">WhatsApp</div>
         <div className="whatsapp-promo__copy">
           <p className="whatsapp-promo__title">{content.title}</p>
           {content.subtitle ? <p className="whatsapp-promo__subtitle">{content.subtitle}</p> : null}
         </div>
-        <span className="whatsapp-promo__button">{content.buttonText ?? 'क्लिक करें'}</span>
+        <div className="whatsapp-promo__qr" aria-hidden="true">
+          <img src={qrCodeImage} alt="" loading="lazy" />
+        </div>
       </a>
     </section>
   )

@@ -31,6 +31,11 @@
   line-height: 1;
 }
 
+.feature-band__heading h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+
 .feature-band__grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -81,15 +86,31 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  align-items: flex-start;
   color: #6fe6ff;
   font-size: 0.82rem;
   font-weight: 700;
 }
 
 .feature-band__meta span {
-  display: inline-flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
   gap: 8px;
+  width: 100%;
+  line-height: 1.25;
+}
+
+.feature-band__meta a {
+  display: inline-block;
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.18s ease;
+}
+
+.feature-band__meta a:hover,
+.feature-band__meta a:focus-visible {
+  color: #ffffff;
 }
 
 .feature-band__meta svg {

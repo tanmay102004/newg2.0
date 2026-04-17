@@ -1,4 +1,4 @@
-import { buildArticleHref, getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
+import { buildArticleHref, buildAuthorHref, getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
 import './SidebarWidgets.css'
 
 function UserIcon() {
@@ -47,7 +47,7 @@ function SidebarWidgets({
                 <p>
                   <span>
                     <UserIcon />
-                    {story.author}
+                    <a href={buildAuthorHref(story.author)}>{story.author}</a>
                   </span>
                   <span>
                     <CalendarIcon />

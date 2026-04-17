@@ -1,5 +1,19 @@
 import './NewsShowcase.css'
-import { getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
+import { buildAuthorHref, getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
+import { resolveFixedSocialHref } from '../utils/socialLinks'
+import StorySectionChips from './StorySectionChips'
+
+function HeadingText({ title, href }) {
+  if (!href) {
+    return <h2>{title}</h2>
+  }
+
+  return (
+    <h2>
+      <a href={href}>{title}</a>
+    </h2>
+  )
+}
 
 function IconX() {
   return (
@@ -36,24 +50,12 @@ function IconYoutube() {
 function MetaRow({ author, date }) {
   return (
     <div className="news-showcase__meta">
-      {author ? <span>{author}</span> : null}
-      {date ? <span>{date}</span> : null}
-    </div>
-  )
-}
-
-function TagList({ tags }) {
-  if (!tags?.length) {
-    return null
-  }
-
-  return (
-    <div className="news-showcase__tags">
-      {tags.map((tag) => (
-        <span className="news-showcase__tag" key={tag}>
-          {tag}
+      {author ? (
+        <span>
+          <a href={buildAuthorHref(author)}>{author}</a>
         </span>
-      ))}
+      ) : null}
+      {date ? <span>{date}</span> : null}
     </div>
   )
 }
@@ -63,7 +65,15 @@ function CardImage({ story, featured = false }) {
     <div
       className={`news-showcase__image ${story.imageClass}${featured ? ' is-featured' : ''}`}
       aria-hidden="true"
-    />
+    >
+      {story.imageUrl ? (
+        <img
+          src={story.imageUrl}
+          alt={story.imageAlt ?? story.title ?? ''}
+          loading="lazy"
+        />
+      ) : null}
+    </div>
   )
 }
 
@@ -75,7 +85,7 @@ function OverlayCard({ story }) {
     <a className="news-showcase__featured-card" href={href} {...linkBehavior}>
       <CardImage story={story} featured />
       <div className="news-showcase__featured-content">
-        <TagList tags={story.tags} />
+        <StorySectionChips story={story} wrapperClassName="news-showcase__tags" itemClassName="news-showcase__tag" />
         <h3 className="news-showcase__featured-title">{story.title}</h3>
         <MetaRow author={story.author} date={story.date} />
       </div>
@@ -91,7 +101,7 @@ function InlineCard({ story }) {
     <a className="news-showcase__inline-card" href={href} {...linkBehavior}>
       <CardImage story={story} />
       <div className="news-showcase__inline-content">
-        <TagList tags={story.tags} />
+        <StorySectionChips story={story} wrapperClassName="news-showcase__tags" itemClassName="news-showcase__tag" />
         <h3 className="news-showcase__inline-title">{story.title}</h3>
         <MetaRow author={story.author} date={story.date} />
       </div>
@@ -107,7 +117,7 @@ function SidebarCard({ story }) {
     <a className="news-showcase__sidebar-feature" href={href} {...linkBehavior}>
       <CardImage story={story} featured />
       <div className="news-showcase__sidebar-feature-content">
-        <TagList tags={story.tags} />
+        <StorySectionChips story={story} wrapperClassName="news-showcase__tags" itemClassName="news-showcase__tag" />
         <h3 className="news-showcase__sidebar-feature-title">{story.title}</h3>
         <MetaRow author={story.author} date={story.date} />
       </div>
@@ -150,7 +160,7 @@ function SocialConnectBox({ content }) {
             <a
               key={platform.label}
               className={`news-showcase__social-link ${platform.className}`}
-              href={platform.href}
+              href={resolveFixedSocialHref(platform)}
               aria-label={platform.label}
               target="_blank"
               rel="noreferrer"
@@ -172,7 +182,7 @@ function NewsShowcase({ ariaLabel, content }) {
       <div className="news-showcase__main">
         <div className="news-showcase__section-heading">
           <span className="news-showcase__heading-accent" aria-hidden="true" />
-          <h2>{leftSection.title}</h2>
+          <HeadingText title={leftSection.title} href={leftSection.titleHref} />
         </div>
 
         <div className="news-showcase__overlay-grid">

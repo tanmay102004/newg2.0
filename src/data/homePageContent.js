@@ -1,3 +1,5 @@
+import magazinePdf from '../assets/Magzine.pdf'
+
 export const homePageContent = {
   locale: 'hi-IN',
   pageTitle: 'न्यूजी इंडिया ',
@@ -12,7 +14,7 @@ export const homePageContent = {
     ePaperLabel: 'ई-पेपर',
     ePaperHref: '/?epaper=1',
     eMagazineLabel: 'ई-मैगज़ीन',
-    eMagazineHref: '/',
+    eMagazineHref: '/?emagazine=1',
     items: [
       { label: 'होम', href: '/' },
       { label: 'ब्रेकिंग', href: '/' },
@@ -98,6 +100,36 @@ export const homePageContent = {
     ],
     emptyState: 'चुनी हुई तारीख का ई-पेपर अभी उपलब्ध नहीं है।',
   },
+  magazinePage: {
+    ariaLabel: 'ई-मैगज़ीन पेज',
+    title: 'ई-मैगज़ीन',
+    defaultEdition: 'newg',
+    defaultSection: 'magazine',
+    defaultDate: '2026-04-01',
+    editions: [{ value: 'newg', label: 'NewG India' }],
+    sections: [{ value: 'magazine', label: 'Magzine' }],
+    actionLabels: {
+      zoom: 'Zoom',
+      zoomOut: 'Zoom Out',
+      fullscreen: 'Full Screen',
+      clip: 'Clip',
+    },
+    issues: [
+      {
+        id: 'newg-magazine-2026-04-01',
+        edition: 'newg',
+        section: 'magazine',
+        date: '2026-04-01',
+        displayDate: '01 अप्रैल 2026',
+        cityLabel: 'NewG India',
+        sectionLabel: 'Magzine',
+        headline: 'NewG Magazine 01 Apr 2026',
+        pageCount: 1,
+        pdfUrl: magazinePdf,
+      },
+    ],
+    emptyState: 'चुनी हुई तारीख की ई-मैगज़ीन अभी उपलब्ध नहीं है।',
+  },
   ads: {
     heroTop: {
       ariaLabel: 'शीर्ष विज्ञापन',
@@ -171,6 +203,7 @@ export const homePageContent = {
     ariaLabel: 'देश और विदेश समाचार',
     leftSection: {
       title: 'देश',
+      titleHref: '/?desh=1',
       featuredStories: [
         {
           id: 'punjab-blast',
@@ -218,6 +251,7 @@ export const homePageContent = {
     },
     rightSection: {
       title: 'विदेश',
+      titleHref: '/?videsh=1',
       featuredStory: {
         id: 'bihar-day-us',
         imageClass: 'news-showcase__image--event-stage',
@@ -282,6 +316,7 @@ export const homePageContent = {
   featureBandSection: {
     ariaLabel: 'मनोरंजन सेक्शन',
     title: 'मनोरंजन',
+    titleHref: '/?entertainment=1',
     items: [
       {
         id: 'ent-legal-notice',
@@ -312,6 +347,7 @@ export const homePageContent = {
   newsColumnsSection: {
     ariaLabel: 'खेल और न्यूज़ खिड़की सेक्शन',
     leftTitle: 'खेल',
+    leftTitleHref: '/?khel=1',
     stories: [
       {
         id: 'sports-suraj-vote',
@@ -358,6 +394,7 @@ export const homePageContent = {
       {
         id: 'news-window',
         title: 'न्यूज़ खिड़की',
+        titleHref: '/?newsKhidki=1',
         story: {
           id: 'bichpuri-project',
           title: 'रामवीर सिंह बिछपुरी का पहले से देवली-रोशनपुर में विकास की शुरुआत, 14 करोड़ के कार्यों का शुभारंभ',
@@ -369,6 +406,7 @@ export const homePageContent = {
       {
         id: 'editorial-block',
         title: 'सम्पादकीय',
+        titleHref: '/?sampadkiya=1',
         story: {
           id: 'astronaut-editorial',
           title: 'आर्टेमिस 2: एस्ट्रोनॉट्स चांद का चक्कर लगाने के लिए रवाना, जानिए इनके राज',
@@ -382,6 +420,7 @@ export const homePageContent = {
       {
         id: 'tech-block',
         title: 'टेक्नोलॉजी',
+        titleHref: '/?technology=1',
         story: {
           id: 'tech-window',
           title: 'देश का डिजिटल व्यापार और इंटरनेट का नया दौर, स्टार्टअप इकोसिस्टम पर असर',
@@ -398,6 +437,7 @@ export const homePageContent = {
     ariaLabel: 'राजनीति और राज्य समाचार',
     leftSection: {
       title: 'राजनीति',
+      titleHref: '/?rajniti=1',
       featuredStory: {
         id: 'cm-housing',
         imageClass: 'topic-section__image--meeting',
@@ -445,6 +485,7 @@ export const homePageContent = {
     },
     rightSection: {
       title: 'राज्य',
+      titleHref: '/?rajya=1',
       featuredStory: {
         id: 'helmet-safety',
         imageClass: 'topic-section__image--helmet',

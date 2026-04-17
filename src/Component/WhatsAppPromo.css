@@ -69,19 +69,25 @@
   line-height: 1.42;
 }
 
-.whatsapp-promo__button {
+.whatsapp-promo__qr {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 176px;
-  min-height: 56px;
-  padding: 0 24px;
-  border-radius: 999px;
+  width: 96px;
+  height: 96px;
+  padding: 8px;
+  border-radius: 18px;
   background: #ffffff;
-  color: #111827;
-  font-size: 1.05rem;
-  font-weight: 800;
+  overflow: hidden;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+}
+
+.whatsapp-promo__qr img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 @media (max-width: 860px) {
@@ -97,5 +103,10 @@
 
   .whatsapp-promo__title {
     font-size: 1.65rem;
+  }
+
+  .whatsapp-promo__qr {
+    width: 88px;
+    height: 88px;
   }
 }

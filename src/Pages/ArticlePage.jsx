@@ -1,10 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import FooterSection from '../Component/FooterSection'
 import Navbar from '../Component/Navbar'
 import SidebarWidgets from '../Component/SidebarWidgets'
 import { getResolvedArticlePageContent } from '../data/articlePages'
+import { createComment, getComments } from '../services/commentsService'
 import { getResolvedNavItems } from '../utils/navigation'
-import { getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
+import { buildAuthorHref, getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
 import './ArticlePage.css'
 
 function ShareIcon({ type }) {
@@ -70,9 +71,11 @@ function ArticleBodyBlock({ block }) {
   if (block.type === 'embed') {
     return (
       <div className="article-page__embed-card">
-        <div className="article-page__embed-top">
-          <div>
-            <strong>{block.authorName}</strong>
+      <div className="article-page__embed-top">
+        <div>
+            <a href={buildAuthorHref(block.authorName)} className="article-page__author-link">
+              <strong>{block.authorName}</strong>
+            </a>
             <span>{block.handle}</span>
           </div>
           <span className="article-page__embed-badge">{block.platform?.toUpperCase()}</span>
@@ -91,12 +94,135 @@ function ArticleBodyBlock({ block }) {
   return <p className="article-page__paragraph">{block.content}</p>
 }
 
+function buildShareHref(link, pageUrl, articleTitle) {
+  const safeUrl = encodeURIComponent(pageUrl)
+  const safeTitle = encodeURIComponent(articleTitle)
+
+  switch (link.type) {
+    case 'facebook':
+      return `https://www.facebook.com/sharer/sharer.php?u=${safeUrl}`
+    case 'x':
+      return `https://x.com/intent/post?url=${safeUrl}&text=${safeTitle}`
+    case 'linkedin':
+      return `https://www.linkedin.com/sharing/share-offsite/?url=${safeUrl}`
+    case 'whatsapp':
+      return `https://wa.me/?text=${encodeURIComponent(`${articleTitle} ${pageUrl}`)}`
+    case 'email':
+      return `mailto:?subject=${safeTitle}&body=${encodeURIComponent(`${articleTitle}\n\n${pageUrl}`)}`
+    case 'telegram':
+      return `https://t.me/share/url?url=${safeUrl}&text=${safeTitle}`
+    default:
+      return link.href ?? pageUrl
+  }
+}
+
+function buildTagHref(tag) {
+  return `/?tag=${encodeURIComponent(tag)}`
+}
+
+function formatCommentDate(value) {
+  try {
+    return new Intl.DateTimeFormat('hi-IN', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(new Date(value))
+  } catch {
+    return ''
+  }
+}
+
 function ArticlePage({ content, articleId }) {
   const article = getResolvedArticlePageContent(articleId, content)
+  const [commentForm, setCommentForm] = useState({
+    comment: '',
+    name: '',
+    email: '',
+    website: '',
+    remember: false,
+  })
+  const [comments, setComments] = useState([])
+  const pageUrl = useMemo(() => {
+    if (typeof window !== 'undefined' && window.location?.href) {
+      return window.location.href
+    }
+
+    const fallbackBase = 'https://newgindia.com/'
+    return articleId ? `${fallbackBase}?article=${articleId}` : fallbackBase
+  }, [articleId])
+
+  const shareLinks = useMemo(
+    () =>
+      article.shareLinks.map((link) => ({
+        ...link,
+        href: buildShareHref(link, pageUrl, article.title),
+      })),
+    [article.shareLinks, article.title, pageUrl],
+  )
 
   useEffect(() => {
-    document.title = `${article.title} | ${content.brand?.title ?? 'न्यूज़ी इंडिया'}`
-  }, [article.title, content.brand?.title])
+    document.title = `${article.seo?.metaTitle || article.title} | ${content.brand?.title ?? 'न्यूज़ी इंडिया'}`
+  }, [article.seo?.metaTitle, article.title, content.brand?.title])
+
+  useEffect(() => {
+    let isMounted = true
+
+    getComments(article.id)
+      .then((loadedComments) => {
+        if (isMounted) {
+          setComments(loadedComments)
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setComments([])
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [article.id])
+
+  const totalCommentCount = article.commentCount + comments.length
+
+  function handleCommentFieldChange(event) {
+    const { name, value, type, checked } = event.target
+
+    setCommentForm((current) => ({
+      ...current,
+      [name]: type === 'checkbox' ? checked : value,
+    }))
+  }
+
+  async function handleCommentSubmit(event) {
+    event.preventDefault()
+
+    if (!commentForm.comment.trim() || !commentForm.name.trim() || !commentForm.email.trim()) {
+      return
+    }
+
+    const nextComment = {
+      body: commentForm.comment.trim(),
+      name: commentForm.name.trim(),
+      email: commentForm.email.trim(),
+      website: commentForm.website.trim(),
+      createdAt: new Date().toISOString(),
+    }
+
+    const savedComment = await createComment(article.id, nextComment)
+    setComments((current) => [savedComment, ...current])
+
+    setCommentForm((current) => ({
+      ...current,
+      comment: '',
+      name: current.remember ? current.name : '',
+      email: current.remember ? current.email : '',
+      website: current.remember ? current.website : '',
+    }))
+  }
 
   return (
     <main className="article-shell" lang="hi">
@@ -120,22 +246,24 @@ function ArticlePage({ content, articleId }) {
                   <div className="article-page__meta">
                     <span>
                       <UserIcon />
-                      {article.author.name}
+                      <a href={buildAuthorHref(article.author.name)} className="article-page__author-link">
+                        {article.author.name}
+                      </a>
                     </span>
                     <span>
                       <CalendarIcon />
                       {article.date}
                     </span>
-                    <span>
+                    <a href="#article-comments" className="article-page__comment-link">
                       <CommentIcon />
-                      {article.commentCount}
-                    </span>
+                      {totalCommentCount}
+                    </a>
                   </div>
 
                   <div className="article-page__share">
                     <span>Share This Article:</span>
                     <div className="article-page__share-links">
-                      {article.shareLinks.map((link) => (
+                      {shareLinks.map((link) => (
                         <a
                           key={`${link.type}-${link.href}`}
                           href={link.href}
@@ -161,7 +289,7 @@ function ArticlePage({ content, articleId }) {
               </div>
 
               <div className="article-page__body">
-                {article.blocks.map((block, index) => (
+                {article.blocks.filter((block) => block.type !== 'embed').map((block, index) => (
                   <ArticleBodyBlock key={`${block.type}-${index}`} block={block} />
                 ))}
               </div>
@@ -171,13 +299,15 @@ function ArticlePage({ content, articleId }) {
                   <strong>Tags :</strong>
                   <div className="article-page__tags">
                     {article.tags.map((tag) => (
-                      <span key={tag}>{tag}</span>
+                      <a key={tag} href={buildTagHref(tag)}>
+                        {tag}
+                      </a>
                     ))}
                   </div>
                 </div>
 
                 <div className="article-page__share-inline">
-                  {article.shareLinks.map((link) => (
+                  {shareLinks.map((link) => (
                     <a
                       key={`inline-${link.type}-${link.href}`}
                       href={link.href}
@@ -228,40 +358,97 @@ function ArticlePage({ content, articleId }) {
                     .join('')}
                 </div>
                 <div className="article-page__author-copy">
-                  <h3>{article.author.name}</h3>
+                  <h3>
+                    <a href={buildAuthorHref(article.author.name)} className="article-page__author-link">
+                      {article.author.name}
+                    </a>
+                  </h3>
                   <p className="article-page__author-email">{article.author.email}</p>
                   <p>{article.author.bio}</p>
                 </div>
               </section>
 
-              <section className="article-page__comments">
+              <section className="article-page__comments" id="article-comments">
                 <h3>Leave a Reply</h3>
-                <form className="article-page__comment-form" onSubmit={(event) => event.preventDefault()}>
+                <form className="article-page__comment-form" onSubmit={handleCommentSubmit}>
                   <p>Your email address will not be published. Required fields are marked *</p>
                   <label>
                     Comment *
-                    <textarea rows="7" />
+                    <textarea
+                      rows="7"
+                      name="comment"
+                      value={commentForm.comment}
+                      onChange={handleCommentFieldChange}
+                    />
                   </label>
                   <div className="article-page__comment-grid">
                     <label>
                       Name *
-                      <input type="text" />
+                      <input
+                        type="text"
+                        name="name"
+                        value={commentForm.name}
+                        onChange={handleCommentFieldChange}
+                      />
                     </label>
                     <label>
                       Email *
-                      <input type="email" />
+                      <input
+                        type="email"
+                        name="email"
+                        value={commentForm.email}
+                        onChange={handleCommentFieldChange}
+                      />
                     </label>
                     <label>
                       Website
-                      <input type="text" />
+                      <input
+                        type="text"
+                        name="website"
+                        value={commentForm.website}
+                        onChange={handleCommentFieldChange}
+                      />
                     </label>
                   </div>
                   <label className="article-page__comment-check">
-                    <input type="checkbox" />
+                    <input
+                      type="checkbox"
+                      name="remember"
+                      checked={commentForm.remember}
+                      onChange={handleCommentFieldChange}
+                    />
                     <span>Save my name, email, and website in this browser for the next time I comment.</span>
                   </label>
                   <button type="submit">Post Comment</button>
                 </form>
+
+                {comments.length ? (
+                  <div className="article-page__comment-list" aria-label="User comments">
+                    {comments.map((comment) => (
+                      <article key={comment.id} className="article-page__comment-card">
+                        <div className="article-page__comment-card-top">
+                          <div className="article-page__comment-avatar" aria-hidden="true">
+                            {comment.name
+                              .split(' ')
+                              .slice(0, 2)
+                              .map((part) => part[0])
+                              .join('')}
+                          </div>
+                          <div className="article-page__comment-card-meta">
+                            <strong>{comment.name}</strong>
+                            <span>{formatCommentDate(comment.createdAt)}</span>
+                            {comment.website ? (
+                              <a href={comment.website} target="_blank" rel="noreferrer">
+                                {comment.website}
+                              </a>
+                            ) : null}
+                          </div>
+                        </div>
+                        <p>{comment.body}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
               </section>
             </article>
 

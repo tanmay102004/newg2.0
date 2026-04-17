@@ -1,0 +1,38 @@
+export const employeeSeedUsers = [
+  {
+    id: 'emp-admin-01',
+    name: 'NewG Admin',
+    email: 'admin@newgindia.com',
+    password: 'Admin@123',
+    role: 'admin',
+    status: 'active',
+    bio: '',
+  },
+  {
+    id: 'emp-reporter-01',
+    name: 'Riya Sharma',
+    email: 'riya.sharma@newgindia.com',
+    password: 'Reporter@123',
+    role: 'reporter',
+    status: 'active',
+    bio: 'Riya Sharma is a reporter at NewG India and focuses on ground reporting, civic issues, and stories from the capital.',
+  },
+  {
+    id: 'emp-seo-01',
+    name: 'Aman Verma',
+    email: 'aman.verma@newgindia.com',
+    password: 'Seo@123',
+    role: 'seo',
+    status: 'active',
+    bio: '',
+  },
+  {
+    id: 'emp-editor-01',
+    name: 'Neha Singh',
+    email: 'neha.singh@newgindia.com',
+    password: 'Editor@123',
+    role: 'editor',
+    status: 'active',
+    bio: '',
+  },
+]

@@ -4,6 +4,14 @@ export function buildArticleHref(articleId = 'default') {
   return `/?article=${encodeURIComponent(articleId)}`
 }
 
+export function buildAuthorHref(authorName = '') {
+  return `/?author=${encodeURIComponent(authorName)}`
+}
+
+export function buildTagHref(tagName = '') {
+  return `/?tag=${encodeURIComponent(tagName)}`
+}
+
 export function isExternalHref(href = '') {
   return /^https?:\/\//i.test(href)
 }

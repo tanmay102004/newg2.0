@@ -13,6 +13,7 @@ import TopStoriesGridSection from '../Component/TopStoriesGridSection'
 import VideoSection from '../Component/VideoSection'
 import WebStoriesSection from '../Component/WebStoriesSection'
 import WhatsAppPromo from '../Component/WhatsAppPromo'
+import { getResolvedTrendingTagItems } from '../data/tagPages'
 import { getResolvedNavItems } from '../utils/navigation'
 import './Home.css'
 
@@ -34,7 +35,7 @@ function Home({ content }) {
       <NewsMeta
         ariaLabel={content.meta.ariaLabel}
         label={content.meta.label}
-        items={content.meta.items}
+        items={getResolvedTrendingTagItems(content)}
       />
       
       <HeroNews

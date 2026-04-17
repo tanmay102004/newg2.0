@@ -40,6 +40,13 @@ a.hero-news__story-card {
   overflow: hidden;
 }
 
+.hero-news__media-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .hero-news__image.is-large {
   aspect-ratio: 16 / 7;
 }

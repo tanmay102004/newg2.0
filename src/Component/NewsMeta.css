@@ -30,7 +30,7 @@
 .news-meta__items {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
@@ -72,7 +72,7 @@
   }
 
   .news-meta__items {
-    gap: 8px;
+    gap: 10px;
   }
 
   .news-meta__chip {

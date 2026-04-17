@@ -1,27 +1,16 @@
 import './TopicSection.css'
-import { getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
+import { buildAuthorHref, getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
+import StorySectionChips from './StorySectionChips'
 
 function MetaRow({ author, date }) {
   return (
     <div className="topic-section__meta">
-      {author ? <span>{author}</span> : null}
-      {date ? <span>{date}</span> : null}
-    </div>
-  )
-}
-
-function TagList({ tags }) {
-  if (!tags?.length) {
-    return null
-  }
-
-  return (
-    <div className="topic-section__tags">
-      {tags.map((tag) => (
-        <span className="topic-section__tag" key={tag}>
-          {tag}
+      {author ? (
+        <span>
+          <a href={buildAuthorHref(author)}>{author}</a>
         </span>
-      ))}
+      ) : null}
+      {date ? <span>{date}</span> : null}
     </div>
   )
 }
@@ -32,9 +21,17 @@ function StoryImage({ story, featured = false }) {
       <div
         className={`topic-section__image ${story.imageClass}${featured ? ' is-featured' : ''}`}
         aria-hidden="true"
-      />
+      >
+        {story.imageUrl ? (
+          <img
+            src={story.imageUrl}
+            alt={story.imageAlt ?? story.title ?? ''}
+            loading="lazy"
+          />
+        ) : null}
+      </div>
       <div className="topic-section__image-tags">
-        <TagList tags={story.tags} />
+        <StorySectionChips story={story} wrapperClassName="topic-section__tags" itemClassName="topic-section__tag" />
       </div>
     </div>
   )
@@ -80,7 +77,7 @@ function Column({ section, singleColumnList = false }) {
     <div className="topic-section__column">
       <div className="topic-section__heading">
         <span className="topic-section__heading-accent" aria-hidden="true" />
-        <h2>{section.title}</h2>
+        <h2>{section.titleHref ? <a href={section.titleHref}>{section.title}</a> : section.title}</h2>
       </div>
 
       <FeaturedStory story={section.featuredStory} />

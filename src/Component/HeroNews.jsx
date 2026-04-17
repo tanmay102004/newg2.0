@@ -31,7 +31,16 @@ function StoryMedia({ story, large = false }) {
     <div
       className={`hero-news__image ${story.imageClass}${large ? ' is-large' : ''}`}
       aria-hidden="true"
-    />
+    >
+      {story.imageUrl ? (
+        <img
+          className="hero-news__media-image"
+          src={story.imageUrl}
+          alt={story.imageAlt ?? story.title ?? ''}
+          loading="lazy"
+        />
+      ) : null}
+    </div>
   )
 }
 

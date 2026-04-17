@@ -18,6 +18,20 @@ export function getResolvedNavItems(navItems = []) {
       }
     }
 
+    if (index === 3 && (item.href ?? '/') === '/') {
+      return {
+        ...item,
+        href: '/?election=1',
+      }
+    }
+
+    if (index === 4 && (item.href ?? '/') === '/') {
+      return {
+        ...item,
+        href: '/?podcast=1',
+      }
+    }
+
     return item
   })
 }

@@ -1,3 +1,6 @@
+import { resolveStorySections } from '../utils/storySections'
+import { getPublishedArticlePages, getPublishedStorySummaries } from '../services/storySubmissions'
+
 const baseArticle = {
   id: 'default',
   categoryChips: ['देश', 'राजनीति'],
@@ -164,7 +167,7 @@ export const defaultArticlePages = {
   },
 }
 
-function normalizeSummaryStory(story = {}) {
+export function normalizeSummaryStory(story = {}) {
   if (!story) {
     return null
   }
@@ -177,12 +180,13 @@ function normalizeSummaryStory(story = {}) {
     date: story.date ?? story.publishedAt ?? '',
     imageUrl: story.imageUrl ?? story.thumbnailUrl ?? story.image ?? '',
     imageClass: story.imageClass ?? '',
-    tags: story.tags ?? [],
+    storySections: resolveStorySections(story),
   }
 }
 
-function collectSummaryStories(content = {}) {
+export function collectSummaryStories(content = {}) {
   const pool = []
+  const publishedStories = getPublishedStorySummaries()
 
   const pushStory = (story) => {
     const normalized = normalizeSummaryStory(story)
@@ -204,8 +208,35 @@ function collectSummaryStories(content = {}) {
   ;(content?.featureBandSection?.items ?? []).forEach(pushStory)
   ;(content?.newsColumnsSection?.stories ?? []).forEach(pushStory)
   ;(content?.newsColumnsSection?.sidebarBlocks ?? []).forEach((block) => pushStory(block?.story))
+  publishedStories.forEach(pushStory)
 
   return pool
+}
+
+export function buildStoryFromArticle(article = {}) {
+  const firstParagraph =
+    article.blocks?.find((block) => block.type === 'paragraph')?.content ??
+    article.dek ??
+    article.summary ??
+    ''
+
+  return normalizeSummaryStory({
+    id: article.id,
+    title: article.title,
+    summary: firstParagraph,
+    author: article.author?.name,
+    date: article.date,
+    publishedAt: article.publishedAt,
+    imageUrl: article.heroImageUrl,
+    imageClass: article.heroImageClass,
+    storySections: resolveStorySections({
+      storySections: article.storySections ?? article.publishedIn ?? article.categoryChips ?? article.tags ?? [],
+    }),
+  })
+}
+
+function normalizeAuthorName(value = '') {
+  return value.trim().toLowerCase()
 }
 
 function mergeSidebarContent(baseSidebar = {}, sharedSidebar = {}) {
@@ -237,7 +268,10 @@ function mergeSummaryIntoArticle(template, summary, articleId, blocksOverride) {
     title: summary.title || template.title,
     dek: summary.summary || template.dek,
     date: summary.date || template.date,
-    categoryChips: summary.tags?.length ? summary.tags.slice(0, 2) : template.categoryChips,
+    categoryChips:
+      summary.storySections?.length
+        ? summary.storySections.slice(0, 2).map((section) => section.label)
+        : template.categoryChips,
     author: {
       ...template.author,
       name: summary.author || template.author.name,
@@ -251,7 +285,11 @@ function mergeSummaryIntoArticle(template, summary, articleId, blocksOverride) {
 }
 
 export function getArticlePageContent(articleId, content = {}) {
-  const remotePages = content?.articlePages ?? {}
+  const publishedArticlePages = getPublishedArticlePages()
+  const remotePages = {
+    ...(content?.articlePages ?? {}),
+    ...publishedArticlePages,
+  }
   const remoteArticle = remotePages[articleId] ?? null
   const sharedSidebar =
     content?.articleDetailSidebar ??
@@ -288,5 +326,65 @@ export function getResolvedArticlePageContent(articleId, content = {}) {
   return {
     ...article,
     sidebar: mergeSidebarContent(article.sidebar, sharedSidebar),
+  }
+}
+
+export function getResolvedAuthorPageContent(authorName, content = {}) {
+  const requestedAuthor = authorName?.trim() || ''
+  const normalizedAuthor = normalizeAuthorName(requestedAuthor)
+  const remoteAuthorPages = content?.authorPages ?? {}
+  const remoteAuthorPage =
+    remoteAuthorPages[requestedAuthor] ??
+    remoteAuthorPages[normalizedAuthor] ??
+    null
+  const sharedSidebar =
+    remoteAuthorPage?.sidebar ??
+    content?.articleDetailSidebar ??
+    content?.articlePageSidebar ??
+    content?.articleSidebar ??
+    {}
+
+  const summaryStories = collectSummaryStories(content)
+  const articleStories = Object.values({
+    ...defaultArticlePages,
+    ...(content?.articlePages ?? {}),
+  })
+    .map(buildStoryFromArticle)
+    .filter(Boolean)
+
+  const storyMap = new Map()
+  ;[...summaryStories, ...articleStories].forEach((story) => {
+    if (!story?.id) {
+      return
+    }
+
+    if (!storyMap.has(story.id)) {
+      storyMap.set(story.id, story)
+      return
+    }
+
+    const current = storyMap.get(story.id)
+    storyMap.set(story.id, {
+      ...current,
+      ...story,
+      summary: current.summary || story.summary,
+      imageUrl: current.imageUrl || story.imageUrl,
+    })
+  })
+
+  const stories = [...storyMap.values()].filter(
+    (story) => normalizeAuthorName(story.author) === normalizedAuthor,
+  )
+
+  return {
+    title: remoteAuthorPage?.title ?? requestedAuthor,
+    intro:
+      remoteAuthorPage?.intro ??
+      (requestedAuthor ? `${requestedAuthor} द्वारा लिखी गई सभी स्टोरीज़` : 'लेखक की सभी स्टोरीज़'),
+    readMoreLabel: remoteAuthorPage?.readMoreLabel ?? 'Read More',
+    categoryTitle: remoteAuthorPage?.categoryTitle ?? 'कैटेगरीज़',
+    subscribeTitle: remoteAuthorPage?.subscribeTitle,
+    sidebar: sharedSidebar,
+    stories,
   }
 }

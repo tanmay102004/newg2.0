@@ -78,7 +78,7 @@
   margin: 12px 0 14px;
 }
 
-.breaking-page__chips span {
+.breaking-page__chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -88,6 +88,12 @@
   border-radius: 4px;
   font-size: 0.76rem;
   font-weight: 700;
+  text-decoration: none;
+}
+
+.breaking-page__chip:hover,
+.breaking-page__chip:focus-visible {
+  background: #14a5e5;
 }
 
 .breaking-page__card h2 {
@@ -118,6 +124,17 @@
   width: 16px;
   height: 16px;
   fill: currentColor;
+}
+
+.breaking-page__author-link {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.18s ease;
+}
+
+.breaking-page__author-link:hover,
+.breaking-page__author-link:focus-visible {
+  color: #14a5e5;
 }
 
 .breaking-page__card p {
@@ -173,11 +190,19 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+  position: sticky;
+  top: 24px;
+  align-self: start;
 }
 
 @media (max-width: 1180px) {
   .breaking-page__layout {
     grid-template-columns: 1fr;
+  }
+
+  .breaking-page__sidebar {
+    position: static;
+    top: auto;
   }
 }
 

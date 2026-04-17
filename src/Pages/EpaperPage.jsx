@@ -150,8 +150,8 @@ function normalizeContent(content = {}) {
   }
 }
 
-function EpaperPage({ content, query }) {
-  const epaperContent = useMemo(() => normalizeContent(content.epaperPage ?? {}), [content])
+function EpaperPage({ content, query, pageKey = 'epaperPage', queryKey = 'epaper' }) {
+  const epaperContent = useMemo(() => normalizeContent(content[pageKey] ?? {}), [content, pageKey])
   const todayDateValue = getTodayDateValue()
   const initialEdition =
     query.get('edition')?.trim() || epaperContent.defaultEdition || epaperContent.editions[0]?.value || ''
@@ -268,7 +268,7 @@ function EpaperPage({ content, query }) {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    params.set('epaper', '1')
+    params.set(queryKey, '1')
 
     if (selectedEdition) {
       params.set('edition', selectedEdition)
@@ -283,7 +283,7 @@ function EpaperPage({ content, query }) {
     }
 
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
-  }, [selectedDate, selectedEdition, selectedSection])
+  }, [queryKey, selectedDate, selectedEdition, selectedSection])
 
   const viewerSrc = matchingIssue
     ? `${matchingIssue.pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&zoom=${zoomLevel}`
@@ -770,4 +770,3 @@ function EpaperPage({ content, query }) {
 }
 
 export default EpaperPage
-

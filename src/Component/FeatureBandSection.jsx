@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import './FeatureBandSection.css'
-import { getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
+import { buildAuthorHref, getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
 
 function UserIcon() {
   return (
@@ -32,14 +32,15 @@ function normalizeCard(card = {}) {
 
 function normalizeContent(content = {}) {
   return {
-    ariaLabel: content.ariaLabel ?? 'मनोरंजन सेक्शन',
+    ariaLabel: content.ariaLabel ?? 'Feature band section',
     title: content.title ?? content.heading ?? 'मनोरंजन',
+    titleHref: content.titleHref ?? content.href ?? '',
     items: (content.items ?? content.cards ?? []).map(normalizeCard).filter((item) => item.id),
   }
 }
 
 function FeatureBandSection({ content }) {
-  const { ariaLabel, title, items } = useMemo(() => normalizeContent(content), [content])
+  const { ariaLabel, title, titleHref, items } = useMemo(() => normalizeContent(content), [content])
 
   if (!items.length) {
     return null
@@ -50,7 +51,7 @@ function FeatureBandSection({ content }) {
       <div className="feature-band__inner">
         <div className="feature-band__heading">
           <span className="feature-band__accent" aria-hidden="true" />
-          <h2>{title}</h2>
+          <h2>{titleHref ? <a href={titleHref}>{title}</a> : title}</h2>
         </div>
 
         <div className="feature-band__grid">
@@ -69,7 +70,7 @@ function FeatureBandSection({ content }) {
                     {item.author ? (
                       <span>
                         <UserIcon />
-                        {item.author}
+                        <a href={buildAuthorHref(item.author)}>{item.author}</a>
                       </span>
                     ) : null}
                     {item.date ? (

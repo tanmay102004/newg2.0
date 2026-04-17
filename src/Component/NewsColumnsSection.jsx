@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import './NewsColumnsSection.css'
-import { getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
+import { buildAuthorHref, getLinkBehavior, resolveArticleHref } from '../utils/articleRouting'
+import StorySectionChips from './StorySectionChips'
+import { resolveStorySections } from '../utils/storySections'
 
 function UserIcon() {
   return (
@@ -28,7 +30,7 @@ function normalizeStory(story = {}) {
     href: story.href ?? story.url ?? '#',
     imageUrl: story.imageUrl ?? story.thumbnailUrl ?? story.image ?? '',
     imageAlt: story.imageAlt ?? story.title ?? '',
-    tags: story.tags ?? [],
+    storySections: resolveStorySections(story),
   }
 }
 
@@ -36,14 +38,16 @@ function normalizeSidebarBlock(block = {}) {
   return {
     id: block.id ?? block.title,
     title: block.title ?? block.heading ?? '',
+    titleHref: block.titleHref ?? block.href ?? '',
     story: normalizeStory(block.story ?? block.featuredStory ?? {}),
   }
 }
 
 function normalizeContent(content = {}) {
   return {
-    ariaLabel: content.ariaLabel ?? 'मल्टी कॉलम न्यूज़ सेक्शन',
+    ariaLabel: content.ariaLabel ?? 'News columns section',
     leftTitle: content.leftTitle ?? content.mainTitle ?? 'खेल',
+    leftTitleHref: content.leftTitleHref ?? content.href ?? '',
     stories: (content.stories ?? content.leftStories ?? []).map(normalizeStory).filter((item) => item.id),
     sidebarBlocks: (content.sidebarBlocks ?? content.rightBlocks ?? [])
       .map(normalizeSidebarBlock)
@@ -57,7 +61,7 @@ function MetaLine({ author, date }) {
       {author ? (
         <span>
           <UserIcon />
-          {author}
+          <a href={buildAuthorHref(author)}>{author}</a>
         </span>
       ) : null}
       {date ? (
@@ -71,7 +75,10 @@ function MetaLine({ author, date }) {
 }
 
 function NewsColumnsSection({ content }) {
-  const { ariaLabel, leftTitle, stories, sidebarBlocks } = useMemo(() => normalizeContent(content), [content])
+  const { ariaLabel, leftTitle, leftTitleHref, stories, sidebarBlocks } = useMemo(
+    () => normalizeContent(content),
+    [content],
+  )
 
   if (!stories.length && !sidebarBlocks.length) {
     return null
@@ -82,7 +89,7 @@ function NewsColumnsSection({ content }) {
       <div className="news-columns__main">
         <div className="news-columns__heading">
           <span className="news-columns__accent" aria-hidden="true" />
-          <h2>{leftTitle}</h2>
+          <h2>{leftTitleHref ? <a href={leftTitleHref}>{leftTitle}</a> : leftTitle}</h2>
         </div>
 
         <div className="news-columns__story-list">
@@ -93,13 +100,12 @@ function NewsColumnsSection({ content }) {
               <a key={story.id} className="news-columns__story" href={href} {...getLinkBehavior(href)}>
                 <div className="news-columns__story-media">
                   {story.imageUrl ? <img src={story.imageUrl} alt={story.imageAlt} loading="lazy" /> : null}
-                  {story.tags?.length ? (
-                    <div className="news-columns__tags">
-                      {story.tags.slice(0, 2).map((tag) => (
-                        <span key={tag}>{tag}</span>
-                      ))}
-                    </div>
-                  ) : null}
+                  <StorySectionChips
+                    sections={story.storySections}
+                    limit={2}
+                    wrapperClassName="news-columns__tags"
+                    itemClassName="news-columns__tag"
+                  />
                 </div>
 
                 <div className="news-columns__story-copy">
@@ -118,7 +124,7 @@ function NewsColumnsSection({ content }) {
           <section key={block.id} className="news-columns__sidebar-block">
             <div className="news-columns__sidebar-heading">
               <span className="news-columns__accent" aria-hidden="true" />
-              <h3>{block.title}</h3>
+              <h3>{block.titleHref ? <a href={block.titleHref}>{block.title}</a> : block.title}</h3>
             </div>
 
             {(() => {

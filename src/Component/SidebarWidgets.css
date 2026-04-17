@@ -51,6 +51,17 @@
   gap: 7px;
 }
 
+.sidebar-widgets__card p a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.18s ease;
+}
+
+.sidebar-widgets__card p a:hover,
+.sidebar-widgets__card p a:focus-visible {
+  color: #14a5e5;
+}
+
 .sidebar-widgets__card svg {
   width: 14px;
   height: 14px;

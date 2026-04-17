@@ -1,4 +1,5 @@
 import './NewsMeta.css'
+import { buildTagHref } from '../utils/articleRouting'
 
 function TrendingIcon() {
   return (
@@ -13,12 +14,14 @@ function normalizeItems(items = []) {
   return items
     .map((item) => {
       if (typeof item === 'string') {
-        return { label: item, href: '/' }
+        return { label: item, href: buildTagHref(item) }
       }
 
+      const label = item.label ?? item.title ?? item.name ?? ''
+
       return {
-        label: item.label ?? item.title ?? item.name ?? '',
-        href: item.href ?? item.url ?? item.slug ?? '/',
+        label,
+        href: item.href ?? item.url ?? item.slug ?? buildTagHref(label),
       }
     })
     .filter((item) => item.label)

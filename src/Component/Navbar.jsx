@@ -116,7 +116,7 @@ function Navbar({ navItems, brand, labels, activeItem }) {
         <a className="header-pill-link" href={ePaperHref} target="_blank" rel="noreferrer">
           {ePaperLabel}
         </a>
-        <a className="header-pill-link" href={eMagazineHref}>
+        <a className="header-pill-link" href={eMagazineHref} target="_blank" rel="noreferrer">
           {eMagazineLabel}
         </a>
         <button className="icon-button" type="button" aria-label={labels.searchLabel}>

@@ -4,7 +4,8 @@ import SidebarWidgets from '../Component/SidebarWidgets'
 import { getResolvedArticlePageContent } from '../data/articlePages'
 import { defaultExplainerPage } from '../data/explainerPage'
 import { getResolvedNavItems } from '../utils/navigation'
-import { resolveArticleHref, getLinkBehavior } from '../utils/articleRouting'
+import { buildAuthorHref, resolveArticleHref, getLinkBehavior } from '../utils/articleRouting'
+import StorySectionChips from '../Component/StorySectionChips'
 import './BreakingPage.css'
 
 const STORIES_PER_PAGE = 10
@@ -83,20 +84,19 @@ function ExplainerPage({ content, query }) {
                         </div>
                       ) : null}
 
-                      {story.tags?.length ? (
-                        <div className="breaking-page__chips">
-                          {story.tags.slice(0, 2).map((tag) => (
-                            <span key={tag}>{tag}</span>
-                          ))}
-                        </div>
-                      ) : null}
+                      <StorySectionChips
+                        story={story}
+                        limit={2}
+                        wrapperClassName="breaking-page__chips"
+                        itemClassName="breaking-page__chip"
+                      />
 
                       <h2>{story.title}</h2>
 
                       <div className="breaking-page__meta">
                         <span>
                           <UserIcon />
-                          {story.author}
+                          <a className="breaking-page__author-link" href={buildAuthorHref(story.author)}>{story.author}</a>
                         </span>
                         <span>
                           <CalendarIcon />
