@@ -249,7 +249,7 @@ function getSeedStorySubmissions() {
       reviewer: null,
       notes: '',
     },
-    seo: normalizeSeoData({}, seededSubmission),
+    seo: normalizeSeoData({}),
   }
 
   seededSubmission.publicArticle = buildPublicArticlePayload(seededSubmission)
