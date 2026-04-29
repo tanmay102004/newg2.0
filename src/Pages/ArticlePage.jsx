@@ -58,13 +58,52 @@ function ArticleBodyBlock({ block }) {
     return <h2 className="article-page__body-heading">{block.content}</h2>
   }
 
-  if (block.type === 'ordered-list') {
+  if (block.type === 'ordered-list' || block.type === 'list') {
     return (
-      <ol className="article-page__ordered-list">
+      <ul className="article-page__ordered-list article-page__unordered-list">
         {block.items.map((item) => (
           <li key={item}>{item}</li>
         ))}
-      </ol>
+      </ul>
+    )
+  }
+
+  if (block.type === 'quote') {
+    return <blockquote className="article-page__quote">{block.content}</blockquote>
+  }
+
+  if (block.type === 'code') {
+    return (
+      <pre className="article-page__code">
+        <code>{block.content}</code>
+      </pre>
+    )
+  }
+
+  if (block.type === 'details') {
+    return (
+      <details className="article-page__details">
+        <summary>Read details</summary>
+        <p>{block.content}</p>
+      </details>
+    )
+  }
+
+  if (block.type === 'table') {
+    return (
+      <div className="article-page__table-wrap">
+        <table className="article-page__table">
+          <tbody>
+            {block.rows.map((row, rowIndex) => (
+              <tr key={`row-${rowIndex}`}>
+                {row.map((cell, cellIndex) => (
+                  <td key={`cell-${rowIndex}-${cellIndex}`}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     )
   }
 

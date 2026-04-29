@@ -390,3 +390,22 @@
     padding: 12px;
   }
 }
+
+@media (max-width: 640px) {
+  .web-stories {
+    padding: 22px 14px 28px;
+  }
+
+  .web-stories__rail {
+    grid-auto-columns: minmax(160px, 72vw);
+    gap: 14px;
+  }
+
+  .web-stories-viewer {
+    padding: 12px;
+  }
+
+  .web-stories-page {
+    width: min(100%, 390px);
+  }
+}

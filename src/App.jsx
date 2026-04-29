@@ -29,6 +29,7 @@ import Home from './Pages/Home'
 import { homePageContent, loadHomePageContent } from './services/contentSource'
 import { getEmployeeSession } from './services/employeeAuth'
 import { HOMEPAGE_PLACEMENTS_CHANGE_EVENT } from './services/homepagePlacements'
+import { PUBLICATION_ISSUES_CHANGE_EVENT } from './services/publicationIssues'
 import { STORY_SUBMISSIONS_CHANGE_EVENT } from './services/storySubmissions'
 
 function App() {
@@ -88,7 +89,8 @@ function App() {
     const handleStorageChange = (event) => {
       if (
         event.key === 'newgindia.story.submissions' ||
-        event.key === 'newgindia.homepage.placements'
+        event.key === 'newgindia.homepage.placements' ||
+        event.key === 'newgindia.publication.issues'
       ) {
         loadContent()
       }
@@ -97,12 +99,14 @@ function App() {
     loadContent()
     window.addEventListener(STORY_SUBMISSIONS_CHANGE_EVENT, handlePublicContentChange)
     window.addEventListener(HOMEPAGE_PLACEMENTS_CHANGE_EVENT, handlePublicContentChange)
+    window.addEventListener(PUBLICATION_ISSUES_CHANGE_EVENT, handlePublicContentChange)
     window.addEventListener('storage', handleStorageChange)
 
     return () => {
       isMounted = false
       window.removeEventListener(STORY_SUBMISSIONS_CHANGE_EVENT, handlePublicContentChange)
       window.removeEventListener(HOMEPAGE_PLACEMENTS_CHANGE_EVENT, handlePublicContentChange)
+      window.removeEventListener(PUBLICATION_ISSUES_CHANGE_EVENT, handlePublicContentChange)
       window.removeEventListener('storage', handleStorageChange)
     }
   }, [])

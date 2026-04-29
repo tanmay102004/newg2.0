@@ -14,13 +14,14 @@ import {
 } from '../services/employeeUsers'
 import { reporterPublishPages } from '../data/reporterPublishPages'
 import {
+  buildStoryPreviewSubmission,
   createStorySubmission,
   deleteStorySubmission,
   getReporterStorySubmissions,
   getStorySubmissions,
   publishStorySubmission,
   STORY_SUBMISSIONS_CHANGE_EVENT,
-  updateStorySeo,
+  updateStorySeoArticleFields,
   updateStorySubmission,
   updateStorySubmissionStatus,
 } from '../services/storySubmissions'
@@ -29,8 +30,152 @@ import {
   HOMEPAGE_PLACEMENT_SLOTS,
   HOMEPAGE_PLACEMENTS_CHANGE_EVENT,
   setHomepagePlacementsForSubmission,
-  updateHomepagePlacement,
 } from '../services/homepagePlacements'
+import {
+  getSidebarPlacements,
+  SIDEBAR_STORY_PLACEMENT_SLOTS,
+  SIDEBAR_STORY_PLACEMENTS_CHANGE_EVENT,
+  setSidebarPlacementsForSubmission,
+} from '../services/sidebarPlacements'
+import {
+  createPublicationIssue,
+  getPublicationIssuesForType,
+  PUBLICATION_ISSUES_CHANGE_EVENT,
+} from '../services/publicationIssues'
+
+function createDocumentBlock(type, overrides = {}) {
+  if (type === 'image') {
+    return {
+      id: overrides.id ?? `${type}-block-${Date.now()}`,
+      type,
+      image: overrides.image ?? null,
+      caption: overrides.caption ?? '',
+    }
+  }
+
+  return {
+    id: overrides.id ?? `${type}-block-${Date.now()}`,
+    type,
+    content: overrides.content ?? '',
+  }
+}
+
+function createInitialDocumentBlocks() {
+  return [
+    createDocumentBlock('title', {
+      id: 'reporter-title-block',
+      content: '',
+    }),
+  ]
+}
+
+function buildDocumentBlocksFromSubmission(submission = {}) {
+  if (Array.isArray(submission.documentBlocks) && submission.documentBlocks.length) {
+    return submission.documentBlocks.map((block, index) =>
+      createDocumentBlock(block.type, {
+        id: block.id ?? `document-block-${index + 1}`,
+        content: block.content ?? '',
+        image: block.image ?? null,
+        caption: block.caption ?? block.image?.caption ?? '',
+      }),
+    )
+  }
+
+  const nextBlocks = []
+
+  nextBlocks.push(
+    createDocumentBlock('title', {
+      id: 'legacy-title-block',
+      content: submission.title ?? '',
+    }),
+  )
+  nextBlocks.push(
+    createDocumentBlock('summary', {
+      id: 'legacy-summary-block',
+      content: submission.summary ?? '',
+    }),
+  )
+
+  if (submission.image?.previewUrl) {
+    nextBlocks.push(
+      createDocumentBlock('image', {
+        id: 'legacy-image-block',
+        image: submission.image,
+        caption: submission.image.caption ?? '',
+      }),
+    )
+  }
+
+  if (Array.isArray(submission.contentBlocks) && submission.contentBlocks.length) {
+    submission.contentBlocks.forEach((block, index) => {
+      nextBlocks.push(
+        createDocumentBlock(block.type === 'heading' ? 'heading' : 'paragraph', {
+          id: block.id ?? `legacy-content-block-${index + 1}`,
+          content: block.content ?? '',
+        }),
+      )
+    })
+  } else {
+    nextBlocks.push(
+      createDocumentBlock('paragraph', {
+        id: 'legacy-content-block-1',
+        content: '',
+      }),
+    )
+  }
+
+  return nextBlocks
+}
+
+function isBodyDocumentBlock(block) {
+  return [
+    'paragraph',
+    'heading',
+    'quote',
+    'list',
+    'code',
+    'details',
+    'table',
+  ].includes(block?.type)
+}
+
+function buildSeoPreviewChecks(previewSubmission) {
+  const title = previewSubmission?.title?.trim() ?? ''
+  const summary = previewSubmission?.summary?.trim() ?? ''
+  const focusKeyword = previewSubmission?.seo?.focusKeyword?.trim() ?? ''
+  const ogImageUrl = previewSubmission?.seo?.ogImageUrl?.trim() ?? previewSubmission?.image?.previewUrl ?? ''
+
+  return [
+    {
+      label: 'Visibility',
+      value: title ? 'Good!' : 'Add a title',
+      tone: title ? 'good' : 'warn',
+    },
+    {
+      label: 'SEO Analysis',
+      value:
+        title && summary
+          ? `${Math.min(100, 40 + Math.min(title.length, 60) / 2 + Math.min(summary.length, 120) / 3).toFixed(0)}/100`
+          : '0/100',
+      tone: title && summary ? 'good' : 'warn',
+    },
+    {
+      label: 'Readability',
+      value: summary || previewSubmission?.contentBlocks?.length ? 'Good!' : 'Needs body content',
+      tone: summary || previewSubmission?.contentBlocks?.length ? 'good' : 'warn',
+    },
+    {
+      label: 'Focus Keyphrase',
+      value: focusKeyword || 'No focus keyphrase!',
+      tone: focusKeyword ? 'good' : 'warn',
+    },
+    {
+      label: 'Social',
+      value: ogImageUrl ? 'Social image ready' : 'Missing social markup!',
+      tone: ogImageUrl ? 'good' : 'warn',
+    },
+  ]
+}
 
 function EmployeeDashboardPage({ employeeSession, onLogout }) {
   const activeRole = getRoleDefinition(employeeSession.role)
@@ -44,16 +189,13 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
   })
   const [reporterForm, setReporterForm] = useState({
     targetPages: [],
-    title: '',
-    summary: '',
-    imageFile: null,
-    contentBlocks: [
-      { id: 'block-1', type: '', content: '' },
-    ],
+    documentBlocks: createInitialDocumentBlocks(),
     tags: '',
+    focusKeyword: '',
   })
   const [adminAlert, setAdminAlert] = useState({ type: '', message: '' })
   const [reporterAlert, setReporterAlert] = useState({ type: '', message: '' })
+  const [isReporterPreviewOpen, setIsReporterPreviewOpen] = useState(false)
   const [reporterSubmissions, setReporterSubmissions] = useState(() =>
     getReporterStorySubmissions(employeeSession.email),
   )
@@ -61,6 +203,9 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
   const [homepagePlacements, setHomepagePlacements] = useState(getHomepagePlacements)
   const [homepagePlacementSelections, setHomepagePlacementSelections] = useState({})
   const [openHomepagePlacementMenus, setOpenHomepagePlacementMenus] = useState({})
+  const [sidebarPlacements, setSidebarPlacements] = useState(getSidebarPlacements)
+  const [sidebarPlacementSelections, setSidebarPlacementSelections] = useState({})
+  const [openSidebarPlacementMenus, setOpenSidebarPlacementMenus] = useState({})
   const [reporterBio, setReporterBio] = useState(employeeSession.bio ?? '')
   const [isEditingReporterBio, setIsEditingReporterBio] = useState(false)
   const [expandedSubmissionId, setExpandedSubmissionId] = useState(null)
@@ -68,22 +213,31 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
   const [publishingSubmissionId, setPublishingSubmissionId] = useState(null)
   const [publishMode, setPublishMode] = useState('instant')
   const [scheduledPublishAt, setScheduledPublishAt] = useState('')
+  const [openBlockInserter, setOpenBlockInserter] = useState(null)
+  const [blockBrowser, setBlockBrowser] = useState({
+    open: false,
+    scope: null,
+    index: null,
+    tab: 'blocks',
+  })
   const [editorEditForm, setEditorEditForm] = useState({
-    title: '',
-    summary: '',
     tags: '',
-    contentBlocks: [],
+    documentBlocks: [],
   })
   const [seoEditingSubmissionId, setSeoEditingSubmissionId] = useState(null)
   const [seoEditForm, setSeoEditForm] = useState({
-    metaTitle: '',
-    metaDescription: '',
-    canonicalUrl: '',
+    title: '',
+    summary: '',
     focusKeyword: '',
-    ogTitle: '',
-    ogDescription: '',
-    ogImageUrl: '',
   })
+  const [publicationIssueForm, setPublicationIssueForm] = useState({
+    type: 'epaper',
+    file: null,
+  })
+  const [publicationIssues, setPublicationIssues] = useState(() => ({
+    epaper: getPublicationIssuesForType('epaper'),
+    magazine: getPublicationIssuesForType('magazine'),
+  }))
   const isAdmin = employeeSession.role === 'admin'
   const isReporter = employeeSession.role === 'reporter'
   const isSeo = employeeSession.role === 'seo'
@@ -91,9 +245,38 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
   const managedRoleCards = roleCards.filter((role) => role.key !== 'admin')
   const nonAdminEmployees = employees.filter((employee) => employee.role !== 'admin')
   const activeEmployeeCount = nonAdminEmployees.filter((employee) => employee.status === 'active').length
-  const seoEligibleSubmissions = editorSubmissions.filter(
-    (submission) => submission.status === 'published' || submission.status === 'scheduled',
-  )
+  const seoArticleSubmissions = editorSubmissions
+  const reporterDraftPreview = buildStoryPreviewSubmission({
+    reporter: {
+      name: employeeSession.name,
+      email: employeeSession.email,
+      role: employeeSession.role,
+      bio: employeeSession.bio ?? '',
+    },
+    targetPages: reporterForm.targetPages,
+    documentBlocks: reporterForm.documentBlocks
+      .map((block) =>
+        block.type === 'image'
+          ? {
+              ...block,
+              caption: normalizeReporterText(block.caption ?? '').trim(),
+            }
+          : {
+              ...block,
+              content: normalizeReporterText(block.content ?? '').trim(),
+            },
+      )
+      .filter((block) => (block.type === 'image' ? block.image?.previewUrl : block.content)),
+    tags: normalizeReporterText(reporterForm.tags),
+    seo: {
+      focusKeyword: normalizeReporterText(reporterForm.focusKeyword),
+    },
+  })
+  const reporterDraftPreviewUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/?article=${encodeURIComponent(reporterDraftPreview.id)}`
+      : `/?article=${encodeURIComponent(reporterDraftPreview.id)}`
+  const reporterDraftSeoChecks = buildSeoPreviewChecks(reporterDraftPreview)
   const profileInitials = (employeeSession.name || employeeSession.email)
     .split(' ')
     .map((part) => part[0])
@@ -127,7 +310,9 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
     },
   ]
 
-  const normalizeReporterText = (value) => value.replace(/\bINR\b/gi, '₹')
+  function normalizeReporterText(value) {
+    return value.replace(/\bINR\b/gi, '₹')
+  }
   const sampleReporterSubmission = {
     id: 'sample-story-preview',
     reporter: {
@@ -179,6 +364,23 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
     : [sampleReporterSubmission]
 
   const getReporterBlockLabel = (contentBlocks, block, index) => {
+    if (block.type === 'title') {
+      return 'Title'
+    }
+
+    if (block.type === 'summary') {
+      return 'Short summary'
+    }
+
+    if (block.type === 'image') {
+      const imageIndex =
+        contentBlocks
+          .slice(0, index + 1)
+          .filter((entry) => entry.type === 'image').length
+
+      return `Image ${imageIndex}`
+    }
+
     if (block.type === 'heading') {
       const headingIndex =
         contentBlocks
@@ -220,27 +422,52 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
     setExpandedSubmissionId((current) => (current === submissionId ? null : submissionId))
   }
 
+  const openComposerInserter = (scope, index) => {
+    setOpenBlockInserter((current) =>
+      current?.scope === scope && current?.index === index
+        ? null
+        : { scope, index },
+    )
+  }
+
+  const closeComposerInserter = () => {
+    setOpenBlockInserter(null)
+  }
+
+  const openBlockBrowserPanel = (scope, index, tab = 'blocks') => {
+    setBlockBrowser({
+      open: true,
+      scope,
+      index,
+      tab,
+    })
+    closeComposerInserter()
+  }
+
+  const closeBlockBrowserPanel = () => {
+    setBlockBrowser({
+      open: false,
+      scope: null,
+      index: null,
+      tab: 'blocks',
+    })
+  }
+
   const startEditorSubmissionEdit = (submission) => {
     setEditingEditorSubmissionId(submission.id)
     setEditorEditForm({
-      title: submission.title,
-      summary: submission.summary,
       tags: (submission.tags ?? []).join(', '),
-      contentBlocks: (submission.contentBlocks ?? []).map((block, index) => ({
-        id: block.id ?? `edit-block-${index + 1}`,
-        type: block.type ?? 'paragraph',
-        content: block.content ?? '',
-      })),
+      documentBlocks: buildDocumentBlocksFromSubmission(submission),
     })
   }
 
   const cancelEditorSubmissionEdit = () => {
     setEditingEditorSubmissionId(null)
+    closeComposerInserter()
+    closeBlockBrowserPanel()
     setEditorEditForm({
-      title: '',
-      summary: '',
       tags: '',
-      contentBlocks: [],
+      documentBlocks: [],
     })
   }
 
@@ -259,22 +486,19 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
   const handleEditorEditFieldChange = (field) => (event) => {
     setEditorEditForm((current) => ({
       ...current,
-      [field]:
-        field === 'title' || field === 'summary' || field === 'tags'
-          ? normalizeReporterText(event.target.value)
-          : event.target.value,
+      [field]: field === 'tags' ? normalizeReporterText(event.target.value) : event.target.value,
     }))
   }
 
   const handleEditorBlockChange = (blockId, field) => (event) => {
     setEditorEditForm((current) => ({
       ...current,
-      contentBlocks: current.contentBlocks.map((block) =>
+      documentBlocks: current.documentBlocks.map((block) =>
         block.id === blockId
           ? {
               ...block,
               [field]:
-                field === 'content'
+                field === 'content' || field === 'caption'
                   ? normalizeReporterText(event.target.value)
                   : event.target.value,
             }
@@ -283,53 +507,137 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
     }))
   }
 
-  const handleEditorAddBlock = (type) => {
+  const handleEditorDocumentImageChange = (blockId) => async (event) => {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      setEditorEditForm((current) => ({
+        ...current,
+        documentBlocks: current.documentBlocks.map((block) =>
+          block.id === blockId
+            ? {
+                ...block,
+                image: null,
+                caption: '',
+              }
+            : block,
+        ),
+      }))
+      return
+    }
+
+    const previewUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = () => reject(new Error('Unable to read selected image.'))
+      reader.readAsDataURL(file)
+    }).catch(() => null)
+
+    if (!previewUrl) {
+      setReporterAlert({
+        type: 'error',
+        message: 'Unable to load the selected image. Please try another file.',
+      })
+      return
+    }
+
     setEditorEditForm((current) => ({
       ...current,
-      contentBlocks: [
-        ...current.contentBlocks,
-        {
-          id: `editor-block-${Date.now()}-${current.contentBlocks.length + 1}`,
-          type,
-          content: '',
-        },
-      ],
+      documentBlocks: current.documentBlocks.map((block) =>
+        block.id === blockId
+          ? {
+              ...block,
+              image: {
+                type: 'upload',
+                name: file.name,
+                size: file.size,
+                mimeType: file.type,
+                previewUrl,
+              },
+            }
+          : block,
+      ),
     }))
+  }
+
+  const insertDocumentBlocksAtPosition = (blocks, blockDefinitions, insertAfterIndex, idPrefix) => {
+    const nextBlocks = [...blocks]
+    const createdBlocks = blockDefinitions.map((definition, definitionIndex) =>
+      createDocumentBlock(definition.type, {
+        id: `${idPrefix}-${Date.now()}-${blocks.length + definitionIndex + 1}`,
+        content: definition.content ?? '',
+        caption: definition.caption ?? '',
+        image: definition.image ?? null,
+      }),
+    )
+
+    if (insertAfterIndex === null || insertAfterIndex >= nextBlocks.length - 1) {
+      nextBlocks.push(...createdBlocks)
+      return nextBlocks
+    }
+
+    nextBlocks.splice(insertAfterIndex + 1, 0, ...createdBlocks)
+    return nextBlocks
+  }
+
+  const handleEditorAddBlock = (type, insertAfterIndex = null) => {
+    setEditorEditForm((current) => ({
+      ...current,
+      documentBlocks: insertDocumentBlocksAtPosition(
+        current.documentBlocks,
+        [{ type }],
+        insertAfterIndex,
+        'editor-block',
+      ),
+    }))
+    closeComposerInserter()
+  }
+
+  const handleEditorAddPattern = (patternBlocks, insertAfterIndex = null) => {
+    setEditorEditForm((current) => ({
+      ...current,
+      documentBlocks: insertDocumentBlocksAtPosition(
+        current.documentBlocks,
+        patternBlocks,
+        insertAfterIndex,
+        'editor-pattern',
+      ),
+    }))
+    closeBlockBrowserPanel()
   }
 
   const handleEditorRemoveBlock = (blockId) => {
     setEditorEditForm((current) => ({
       ...current,
-      contentBlocks:
-        current.contentBlocks.length === 1
-          ? current.contentBlocks
-          : current.contentBlocks.filter((block) => block.id !== blockId),
+      documentBlocks: current.documentBlocks.find(
+        (block) => block.id === blockId && block.type === 'title',
+      )
+        ? current.documentBlocks
+        : current.documentBlocks.filter((block) => block.id !== blockId),
     }))
   }
 
   const handleEditorSubmissionSave = (submissionId) => {
-    const normalizedTitle = editorEditForm.title.trim()
-    const normalizedSummary = editorEditForm.summary.trim()
     const normalizedTags = editorEditForm.tags
       .split(',')
       .map((tag) => tag.trim())
       .filter(Boolean)
-    const normalizedBlocks = editorEditForm.contentBlocks
-      .map((block) => ({
-        ...block,
-        content: block.content.trim(),
-      }))
-      .filter((block) => block.content)
+    const normalizedDocumentBlocks = editorEditForm.documentBlocks.filter((block) =>
+      block.type === 'image' ? Boolean(block.image?.previewUrl) : Boolean(block.content?.trim()),
+    )
+    const normalizedTitle =
+      normalizedDocumentBlocks.find((block) => block.type === 'title')?.content?.trim() ?? ''
+    const normalizedBodyBlocks = normalizedDocumentBlocks.filter(
+      (block) => isBodyDocumentBlock(block),
+    )
 
-    if (!normalizedTitle || !normalizedSummary || !normalizedBlocks.length) {
+    if (!normalizedTitle || !normalizedBodyBlocks.length) {
       return
     }
 
     const updatedSubmission = updateStorySubmission(submissionId, {
-      title: normalizedTitle,
-      summary: normalizedSummary,
       tags: normalizedTags,
-      contentBlocks: normalizedBlocks,
+      documentBlocks: normalizedDocumentBlocks,
     })
 
     if (!updatedSubmission) {
@@ -539,6 +847,59 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
     )
   }, [homepagePlacements, editorSubmissions])
 
+  useEffect(() => {
+    const syncSidebarPlacements = () => {
+      setSidebarPlacements(getSidebarPlacements())
+    }
+
+    const handlePlacementChange = () => {
+      syncSidebarPlacements()
+    }
+
+    const handleStorage = (event) => {
+      if (event.key === 'newgindia.sidebar.story.placements') {
+        syncSidebarPlacements()
+      }
+    }
+
+    window.addEventListener(SIDEBAR_STORY_PLACEMENTS_CHANGE_EVENT, handlePlacementChange)
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      window.removeEventListener(SIDEBAR_STORY_PLACEMENTS_CHANGE_EVENT, handlePlacementChange)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
+
+  useEffect(() => {
+    setSidebarPlacementSelections(
+      editorSubmissions.reduce((nextSelections, submission) => {
+        nextSelections[submission.id] = getAssignedSidebarSlots(submission.id).map((slot) => slot.key)
+        return nextSelections
+      }, {}),
+    )
+  }, [sidebarPlacements, editorSubmissions])
+
+  useEffect(() => {
+    const handleIssuesChange = () => {
+      syncPublicationIssues()
+    }
+
+    const handleStorage = (event) => {
+      if (event.key === 'newgindia.publication.issues') {
+        syncPublicationIssues()
+      }
+    }
+
+    window.addEventListener(PUBLICATION_ISSUES_CHANGE_EVENT, handleIssuesChange)
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      window.removeEventListener(PUBLICATION_ISSUES_CHANGE_EVENT, handleIssuesChange)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
+
   const handleFieldChange = (field) => (event) => {
     setFormState((current) => ({
       ...current,
@@ -562,13 +923,21 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
     }))
   }
 
-  const handleReporterImageChange = async (event) => {
+  const handleReporterDocumentImageChange = (blockId) => async (event) => {
     const file = event.target.files?.[0]
 
     if (!file) {
       setReporterForm((current) => ({
         ...current,
-        imageFile: null,
+        documentBlocks: current.documentBlocks.map((block) =>
+          block.id === blockId
+            ? {
+                ...block,
+                image: null,
+                caption: '',
+              }
+            : block,
+        ),
       }))
       return
     }
@@ -590,7 +959,66 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
 
     setReporterForm((current) => ({
       ...current,
-      imageFile: {
+      documentBlocks: current.documentBlocks.map((block) =>
+        block.id === blockId
+          ? {
+              ...block,
+              image: {
+                type: 'upload',
+                name: file.name,
+                size: file.size,
+                mimeType: file.type,
+                previewUrl,
+              },
+            }
+          : block,
+      ),
+    }))
+  }
+
+  const syncPublicationIssues = () => {
+    setPublicationIssues({
+      epaper: getPublicationIssuesForType('epaper'),
+      magazine: getPublicationIssuesForType('magazine'),
+    })
+  }
+
+  const handlePublicationIssueFieldChange = (field) => (event) => {
+    setPublicationIssueForm((current) => ({
+      ...current,
+      [field]: event.target.value,
+    }))
+  }
+
+  const handlePublicationIssueFileChange = async (event) => {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      setPublicationIssueForm((current) => ({
+        ...current,
+        file: null,
+      }))
+      return
+    }
+
+    const previewUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = () => reject(new Error('Unable to read selected publication file.'))
+      reader.readAsDataURL(file)
+    }).catch(() => null)
+
+    if (!previewUrl) {
+      setReporterAlert({
+        type: 'error',
+        message: 'Unable to load the selected publication file. Please try again.',
+      })
+      return
+    }
+
+    setPublicationIssueForm((current) => ({
+      ...current,
+      file: {
         name: file.name,
         size: file.size,
         mimeType: file.type,
@@ -599,15 +1027,48 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
     }))
   }
 
+  const handlePublicationIssueUpload = (event) => {
+    event.preventDefault()
+
+    if (!publicationIssueForm.file) {
+      setReporterAlert({
+        type: 'error',
+        message: 'Please select the e-paper or magazine PDF before uploading.',
+      })
+      return
+    }
+
+    const nextIssue = createPublicationIssue({
+      type: publicationIssueForm.type,
+      file: publicationIssueForm.file,
+      uploadedBy: {
+        name: employeeSession.name,
+        email: employeeSession.email,
+      },
+    })
+
+    syncPublicationIssues()
+    setPublicationIssueForm({
+      type: publicationIssueForm.type,
+      file: null,
+    })
+    setReporterAlert({
+      type: 'success',
+      message: `${
+        nextIssue.type === 'magazine' ? 'E-magazine' : 'E-paper'
+      } uploaded for ${nextIssue.displayDate}. The public issue date now matches the upload date.`,
+    })
+  }
+
   const handleReporterBlockChange = (blockId, field) => (event) => {
     setReporterForm((current) => ({
       ...current,
-      contentBlocks: current.contentBlocks.map((block) =>
+      documentBlocks: current.documentBlocks.map((block) =>
         block.id === blockId
           ? {
               ...block,
               [field]:
-                field === 'content'
+                field === 'content' || field === 'caption'
                   ? normalizeReporterText(event.target.value)
                   : event.target.value,
             }
@@ -616,27 +1077,40 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
     }))
   }
 
-  const handleAddReporterBlock = (type) => {
+  const handleAddReporterBlock = (type, insertAfterIndex = null) => {
     setReporterForm((current) => ({
       ...current,
-      contentBlocks: [
-        ...current.contentBlocks,
-        {
-          id: `block-${Date.now()}-${current.contentBlocks.length + 1}`,
-          type,
-          content: '',
-        },
-      ],
+      documentBlocks: insertDocumentBlocksAtPosition(
+        current.documentBlocks,
+        [{ type }],
+        insertAfterIndex,
+        'block',
+      ),
     }))
+    closeComposerInserter()
+  }
+
+  const handleAddReporterPattern = (patternBlocks, insertAfterIndex = null) => {
+    setReporterForm((current) => ({
+      ...current,
+      documentBlocks: insertDocumentBlocksAtPosition(
+        current.documentBlocks,
+        patternBlocks,
+        insertAfterIndex,
+        'pattern-block',
+      ),
+    }))
+    closeBlockBrowserPanel()
   }
 
   const handleRemoveReporterBlock = (blockId) => {
     setReporterForm((current) => ({
       ...current,
-      contentBlocks:
-        current.contentBlocks.length === 1
-          ? current.contentBlocks
-          : current.contentBlocks.filter((block) => block.id !== blockId),
+      documentBlocks: current.documentBlocks.find(
+        (block) => block.id === blockId && block.type === 'title',
+      )
+        ? current.documentBlocks
+        : current.documentBlocks.filter((block) => block.id !== blockId),
     }))
   }
 
@@ -687,20 +1161,29 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
     event.preventDefault()
     setReporterAlert({ type: '', message: '' })
 
-    const normalizedTitle = normalizeReporterText(reporterForm.title).trim()
-    const normalizedSummary = normalizeReporterText(reporterForm.summary).trim()
-    const normalizedBlocks = reporterForm.contentBlocks
-      .map((block) => ({
-        ...block,
-        content: normalizeReporterText(block.content).trim(),
-      }))
-      .filter((block) => block.content)
+    const normalizedDocumentBlocks = reporterForm.documentBlocks
+      .map((block) =>
+        block.type === 'image'
+          ? {
+              ...block,
+              caption: normalizeReporterText(block.caption ?? '').trim(),
+            }
+          : {
+              ...block,
+              content: normalizeReporterText(block.content ?? '').trim(),
+            },
+      )
+      .filter((block) => (block.type === 'image' ? block.image?.previewUrl : block.content))
+    const normalizedTitle =
+      normalizedDocumentBlocks.find((block) => block.type === 'title')?.content ?? ''
+    const normalizedBodyBlocks = normalizedDocumentBlocks.filter(
+      (block) => isBodyDocumentBlock(block),
+    )
 
     if (
       !reporterForm.targetPages.length ||
       !normalizedTitle ||
-      !normalizedSummary ||
-      !normalizedBlocks.length
+      !normalizedBodyBlocks.length
     ) {
       setReporterAlert({
         type: 'error',
@@ -717,23 +1200,19 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
         bio: employeeSession.bio ?? '',
       },
       targetPages: reporterForm.targetPages,
-      title: normalizedTitle,
-      summary: normalizedSummary,
-      imageFile: reporterForm.imageFile,
-      contentBlocks: normalizedBlocks,
+      documentBlocks: normalizedDocumentBlocks,
       tags: normalizeReporterText(reporterForm.tags),
+      focusKeyword: normalizeReporterText(reporterForm.focusKeyword),
     })
 
     setReporterSubmissions((current) => [nextSubmission, ...current])
+    closeComposerInserter()
+    closeBlockBrowserPanel()
     setReporterForm({
       targetPages: [],
-      title: '',
-      summary: '',
-      imageFile: null,
-      contentBlocks: [
-        { id: 'block-1', type: '', content: '' },
-      ],
+      documentBlocks: createInitialDocumentBlocks(),
       tags: '',
+      focusKeyword: '',
     })
     setReporterAlert({
       type: 'success',
@@ -797,6 +1276,11 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
       (slot) => homepagePlacements[slot.key]?.submissionId === submissionId,
     )
 
+  const getAssignedSidebarSlots = (submissionId) =>
+    SIDEBAR_STORY_PLACEMENT_SLOTS.filter(
+      (slot) => sidebarPlacements[slot.key]?.submissionId === submissionId,
+    )
+
   const handleHomepagePlacementToggle = (submissionId, slotKey) => () => {
     setHomepagePlacementSelections((current) => {
       const currentSelection = current[submissionId] ?? []
@@ -843,29 +1327,75 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
     }))
   }
 
+  const handleSidebarPlacementToggle = (submissionId, slotKey) => () => {
+    setSidebarPlacementSelections((current) => {
+      const currentSelection = current[submissionId] ?? []
+      const nextSelection = currentSelection.includes(slotKey)
+        ? currentSelection.filter((value) => value !== slotKey)
+        : [...currentSelection, slotKey]
+
+      return {
+        ...current,
+        [submissionId]: nextSelection,
+      }
+    })
+  }
+
+  const handleSidebarPlacementApply = (submissionId) => {
+    const selectedSlotKeys = sidebarPlacementSelections[submissionId] ?? []
+
+    setSidebarPlacements(
+      setSidebarPlacementsForSubmission(
+        submissionId,
+        selectedSlotKeys,
+        {
+          name: employeeSession.name,
+          email: employeeSession.email,
+        },
+      ),
+    )
+    setReporterAlert({
+      type: 'success',
+      message: selectedSlotKeys.length
+        ? 'Sidebar placement applied successfully.'
+        : 'Sidebar placement cleared.',
+    })
+    setOpenSidebarPlacementMenus((current) => ({
+      ...current,
+      [submissionId]: false,
+    }))
+  }
+
+  const toggleSidebarPlacementMenu = (submissionId) => () => {
+    setOpenSidebarPlacementMenus((current) => ({
+      ...current,
+      [submissionId]: !current[submissionId],
+    }))
+  }
+
   const startSeoEdit = (submission) => {
+    if (submission.status !== 'review_pending') {
+      setReporterAlert({
+        type: 'error',
+        message: 'Published or scheduled articles cannot be edited by SEO.',
+      })
+      return
+    }
+
     setSeoEditingSubmissionId(submission.id)
     setSeoEditForm({
-      metaTitle: submission.seo?.metaTitle ?? '',
-      metaDescription: submission.seo?.metaDescription ?? '',
-      canonicalUrl: submission.seo?.canonicalUrl ?? '',
+      title: submission.title ?? '',
+      summary: submission.summary ?? '',
       focusKeyword: submission.seo?.focusKeyword ?? '',
-      ogTitle: submission.seo?.ogTitle ?? '',
-      ogDescription: submission.seo?.ogDescription ?? '',
-      ogImageUrl: submission.seo?.ogImageUrl ?? submission.image?.previewUrl ?? '',
     })
   }
 
   const cancelSeoEdit = () => {
     setSeoEditingSubmissionId(null)
     setSeoEditForm({
-      metaTitle: '',
-      metaDescription: '',
-      canonicalUrl: '',
+      title: '',
+      summary: '',
       focusKeyword: '',
-      ogTitle: '',
-      ogDescription: '',
-      ogImageUrl: '',
     })
   }
 
@@ -877,16 +1407,23 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
   }
 
   const handleSeoSave = (submissionId) => {
-    const updatedSubmission = updateStorySeo(
+    const currentSubmission = editorSubmissions.find((submission) => submission.id === submissionId)
+
+    if (!currentSubmission || currentSubmission.status !== 'review_pending') {
+      setReporterAlert({
+        type: 'error',
+        message: 'Only articles in review can be edited by SEO.',
+      })
+      cancelSeoEdit()
+      return
+    }
+
+    const updatedSubmission = updateStorySeoArticleFields(
       submissionId,
       {
-        metaTitle: seoEditForm.metaTitle.trim(),
-        metaDescription: seoEditForm.metaDescription.trim(),
-        canonicalUrl: seoEditForm.canonicalUrl.trim(),
+        title: normalizeReporterText(seoEditForm.title).trim(),
+        summary: normalizeReporterText(seoEditForm.summary).trim(),
         focusKeyword: seoEditForm.focusKeyword.trim(),
-        ogTitle: seoEditForm.ogTitle.trim(),
-        ogDescription: seoEditForm.ogDescription.trim(),
-        ogImageUrl: seoEditForm.ogImageUrl.trim(),
       },
       {
         name: employeeSession.name,
@@ -905,10 +1442,580 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
     )
     setReporterAlert({
       type: 'success',
-      message: 'SEO fields updated successfully.',
+      message: 'Article SEO changes saved successfully.',
     })
     cancelSeoEdit()
   }
+
+  const blockPickerOptions = [
+    {
+      type: 'paragraph',
+      label: 'Paragraph',
+      description: 'Start with the basic building block of all narrative.',
+      badge: 'P',
+      group: 'Text',
+    },
+    {
+      type: 'image',
+      label: 'Image',
+      description: 'Upload a story image that can also become the hero visual.',
+      badge: 'I',
+      group: 'Media',
+    },
+    {
+      type: 'heading',
+      label: 'Heading',
+      description: 'Break the article into clear sections with subheadings.',
+      badge: 'H',
+      group: 'Text',
+    },
+    {
+      type: 'summary',
+      label: 'Summary',
+      description: 'Add a short deck for cards, listings, and the public article intro.',
+      badge: 'S',
+      group: 'Text',
+    },
+  ]
+
+  const blockBrowserOptions = [
+    ...blockPickerOptions,
+    {
+      type: 'quote',
+      label: 'Quote',
+      description: 'Highlight a statement or strong line from the story.',
+      badge: 'Q',
+      group: 'Text',
+    },
+    {
+      type: 'list',
+      label: 'List',
+      description: 'Write one item per line to publish a bullet list.',
+      badge: 'L',
+      group: 'Text',
+    },
+    {
+      type: 'code',
+      label: 'Code',
+      description: 'Show code, data, or monospaced preformatted content.',
+      badge: '</>',
+      group: 'Text',
+    },
+    {
+      type: 'details',
+      label: 'Details',
+      description: 'Create expandable supporting details for longer explanations.',
+      badge: 'D',
+      group: 'Text',
+    },
+    {
+      type: 'table',
+      label: 'Table',
+      description: 'Use one row per line and separate cells with the | symbol.',
+      badge: 'T',
+      group: 'Media',
+    },
+  ]
+
+  const blockPatternOptions = [
+    {
+      id: 'lead-story',
+      label: 'Lead Story',
+      description: 'Intro paragraph followed by a subheading and supporting paragraph.',
+      blocks: [
+        { type: 'paragraph' },
+        { type: 'heading', content: 'Subheading' },
+        { type: 'paragraph' },
+      ],
+    },
+    {
+      id: 'qa',
+      label: 'Q&A Format',
+      description: 'Two question-style headings with answer paragraphs.',
+      blocks: [
+        { type: 'heading', content: 'Question 1' },
+        { type: 'paragraph' },
+        { type: 'heading', content: 'Question 2' },
+        { type: 'paragraph' },
+      ],
+    },
+  ]
+
+  const renderBlockInserter = (scope, insertAfterIndex, blocks, onAddBlock) => {
+    const activeInserter =
+      openBlockInserter?.scope === scope && openBlockInserter?.index === insertAfterIndex
+    const availableOptions = blockPickerOptions.filter((option) => {
+      if (option.type !== 'summary') {
+        return true
+      }
+
+      return !blocks.some((block) => block.type === 'summary')
+    })
+    return (
+      <div className="employee-dashboard__composer-inserter" key={`${scope}-${insertAfterIndex}`}>
+        <button
+          type="button"
+          className="employee-dashboard__composer-plus"
+          onClick={() => openComposerInserter(scope, insertAfterIndex)}
+          aria-expanded={activeInserter}
+          aria-label="Choose next block"
+        >
+          +
+        </button>
+
+        {activeInserter ? (
+          <div className="employee-dashboard__composer-menu">
+            <div className="employee-dashboard__composer-menu-grid">
+              {availableOptions.map((option) => (
+                <button
+                  key={option.type}
+                  type="button"
+                  className="employee-dashboard__composer-menu-item"
+                  onClick={() => onAddBlock(option.type, insertAfterIndex)}
+                >
+                  <span className="employee-dashboard__composer-menu-icon">{option.badge}</span>
+                  <strong>{option.label}</strong>
+                  <span>{option.description}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="employee-dashboard__composer-browse"
+              onClick={() => openBlockBrowserPanel(scope, insertAfterIndex, 'blocks')}
+            >
+              Browse all
+            </button>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
+  const renderBlockBrowserPanel = ({
+    scope,
+    blocks,
+    onAddBlock,
+    onAddPattern,
+  }) => {
+    if (!blockBrowser.open || blockBrowser.scope !== scope) {
+      return null
+    }
+
+    const availableOptions = blockBrowserOptions.filter((option) => {
+      if (option.type !== 'summary') {
+        return true
+      }
+
+      return !blocks.some((block) => block.type === 'summary')
+    })
+    const mediaOptions = availableOptions.filter((option) => option.group === 'Media')
+    const textOptions = availableOptions.filter((option) => option.group === 'Text')
+
+    return (
+      <aside className="employee-dashboard__block-browser">
+        <div className="employee-dashboard__block-browser-head">
+          <div className="employee-dashboard__block-browser-tabs">
+            {[['blocks', 'Blocks']].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`employee-dashboard__block-browser-tab${
+                  blockBrowser.tab === key ? ' employee-dashboard__block-browser-tab--active' : ''
+                }`}
+                onClick={() =>
+                  setBlockBrowser((current) => ({
+                    ...current,
+                    tab: key,
+                  }))
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="employee-dashboard__block-browser-close"
+            onClick={closeBlockBrowserPanel}
+          >
+            ×
+          </button>
+        </div>
+        <div className="employee-dashboard__block-browser-body">
+          <div className="employee-dashboard__block-browser-section">
+            <span className="employee-dashboard__block-browser-label">TEXT</span>
+            <div className="employee-dashboard__block-browser-grid">
+              {textOptions.map((option) => (
+                <button
+                  key={option.type}
+                  type="button"
+                  className="employee-dashboard__block-browser-item"
+                  onClick={() => {
+                    onAddBlock(option.type, blockBrowser.index)
+                    closeBlockBrowserPanel()
+                  }}
+                >
+                  <span className="employee-dashboard__block-browser-item-icon">{option.badge}</span>
+                  <strong>{option.label}</strong>
+                  <span>{option.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="employee-dashboard__block-browser-section">
+            <span className="employee-dashboard__block-browser-label">MEDIA</span>
+            <div className="employee-dashboard__block-browser-grid">
+              {mediaOptions.map((option) => (
+                <button
+                  key={option.type}
+                  type="button"
+                  className="employee-dashboard__block-browser-item"
+                  onClick={() => {
+                    onAddBlock(option.type, blockBrowser.index)
+                    closeBlockBrowserPanel()
+                  }}
+                >
+                  <span className="employee-dashboard__block-browser-item-icon">{option.badge}</span>
+                  <strong>{option.label}</strong>
+                  <span>{option.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </aside>
+    )
+  }
+
+  const renderDocumentBlockEditor = (
+    blocks,
+    block,
+    index,
+    onBlockChange,
+    onImageChange,
+    onRemoveBlock,
+  ) => {
+    const isLockedBlock = block.type === 'title'
+
+    return (
+      <div
+        key={block.id}
+        className={`employee-dashboard__composer-block employee-dashboard__composer-block--${block.type}`}
+      >
+        {block.type !== 'title' ? (
+          <div className="employee-dashboard__composer-block-head">
+            <span>{getReporterBlockLabel(blocks, block, index)}</span>
+            {!isLockedBlock ? (
+              <button
+                type="button"
+                className="employee-dashboard__remove-button"
+                onClick={() => onRemoveBlock(block.id)}
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {block.type === 'image' ? (
+          <div className="employee-dashboard__composer-image-card">
+            {block.image?.previewUrl ? (
+              <img
+                src={block.image.previewUrl}
+                alt={block.image.name || 'Selected story visual'}
+                className="employee-dashboard__composer-image-preview"
+              />
+            ) : (
+              <div className="employee-dashboard__composer-image-placeholder">
+                <strong>Upload story image</strong>
+                <span>The first image block becomes the public article hero image.</span>
+              </div>
+            )}
+            <input type="file" accept="image/*" onChange={onImageChange(block.id)} />
+            <textarea
+              rows="2"
+              placeholder="Write image caption"
+              value={block.caption ?? ''}
+              onChange={onBlockChange(block.id, 'caption')}
+              lang="hi"
+              dir="auto"
+            />
+          </div>
+        ) : (
+          <textarea
+            rows={
+              block.type === 'title'
+                ? 2
+                : block.type === 'summary'
+                  ? 3
+                  : block.type === 'heading'
+                    ? 2
+                    : block.type === 'code' || block.type === 'table'
+                      ? 5
+                      : block.type === 'details'
+                        ? 3
+                    : 6
+            }
+            placeholder={
+              block.type === 'title'
+                ? 'Add title'
+                : block.type === 'summary'
+                  ? 'Add short summary'
+                  : block.type === 'heading'
+                    ? 'Write subheading'
+                    : block.type === 'quote'
+                      ? 'Write quote'
+                      : block.type === 'list'
+                        ? 'Write one item per line'
+                        : block.type === 'code'
+                          ? 'Write code or preformatted content'
+                          : block.type === 'details'
+                            ? 'Write expandable details'
+                            : block.type === 'table'
+                              ? 'Write one row per line, use | between cells'
+                    : 'Start writing your article'
+            }
+            value={block.content ?? ''}
+            onChange={onBlockChange(block.id, 'content')}
+            lang="hi"
+            dir="auto"
+            className={`employee-dashboard__composer-input employee-dashboard__composer-input--${block.type}`}
+          />
+        )}
+      </div>
+    )
+  }
+
+  const renderDocumentComposer = ({
+    scope,
+    blocks,
+    onBlockChange,
+    onImageChange,
+    onRemoveBlock,
+    onAddBlock,
+    onAddPattern,
+  }) => (
+    <div className="employee-dashboard__composer">
+      {renderBlockBrowserPanel({
+        scope,
+        blocks,
+        onAddBlock,
+        onAddPattern,
+      })}
+      <div className="employee-dashboard__composer-page">
+        <div className="employee-dashboard__composer-canvas">
+          {blocks.map((block, index) => (
+            <div key={block.id} className="employee-dashboard__composer-segment">
+              {renderDocumentBlockEditor(
+                blocks,
+                block,
+                index,
+                onBlockChange,
+                onImageChange,
+                onRemoveBlock,
+              )}
+              {renderBlockInserter(scope, index, blocks, onAddBlock)}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderSubmissionDocumentPreview = (submission) => {
+    const previewBlocks = buildDocumentBlocksFromSubmission(submission).filter((block) =>
+      block.type === 'image' ? Boolean(block.image?.previewUrl) : Boolean(block.content?.trim()),
+    )
+
+    return (
+      <div className="employee-dashboard__article-preview">
+        {previewBlocks.map((block) => {
+          if (block.type === 'title') {
+            return (
+              <h2 key={block.id} className="employee-dashboard__article-preview-title">
+                {block.content}
+              </h2>
+            )
+          }
+
+          if (block.type === 'summary') {
+            return (
+              <p key={block.id} className="employee-dashboard__article-preview-summary">
+                {block.content}
+              </p>
+            )
+          }
+
+          if (block.type === 'image' && block.image?.previewUrl) {
+            return (
+              <figure key={block.id} className="employee-dashboard__article-preview-figure">
+                <img
+                  src={block.image.previewUrl}
+                  alt={submission.title}
+                  className="employee-dashboard__article-preview-image"
+                />
+                {block.caption ? (
+                  <figcaption className="employee-dashboard__article-preview-caption">
+                    {block.caption}
+                  </figcaption>
+                ) : null}
+              </figure>
+            )
+          }
+
+          if (block.type === 'heading') {
+            return (
+              <h3 key={block.id} className="employee-dashboard__article-preview-heading">
+                {block.content}
+              </h3>
+            )
+          }
+
+          if (block.type === 'quote') {
+            return (
+              <blockquote key={block.id} className="employee-dashboard__article-preview-quote">
+                {block.content}
+              </blockquote>
+            )
+          }
+
+          if (block.type === 'list') {
+            return (
+              <ul key={block.id} className="employee-dashboard__article-preview-list">
+                {String(block.content)
+                  .split('\n')
+                  .map((item) => item.replace(/^[-*•\d.\s]+/, '').trim())
+                  .filter(Boolean)
+                  .map((item) => (
+                    <li key={`${block.id}-${item}`}>{item}</li>
+                  ))}
+              </ul>
+            )
+          }
+
+          if (block.type === 'code') {
+            return (
+              <pre key={block.id} className="employee-dashboard__article-preview-code">
+                <code>{block.content}</code>
+              </pre>
+            )
+          }
+
+          if (block.type === 'details') {
+            return (
+              <details key={block.id} className="employee-dashboard__article-preview-details">
+                <summary>Read details</summary>
+                <p>{block.content}</p>
+              </details>
+            )
+          }
+
+          if (block.type === 'table') {
+            return (
+              <div key={block.id} className="employee-dashboard__article-preview-table-wrap">
+                <table className="employee-dashboard__article-preview-table">
+                  <tbody>
+                    {String(block.content)
+                      .split('\n')
+                      .map((row) => row.split('|').map((cell) => cell.trim()).filter(Boolean))
+                      .filter((row) => row.length)
+                      .map((row, rowIndex) => (
+                        <tr key={`${block.id}-row-${rowIndex}`}>
+                          {row.map((cell, cellIndex) => (
+                            <td key={`${block.id}-cell-${rowIndex}-${cellIndex}`}>{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          }
+
+          return (
+            <p key={block.id} className="employee-dashboard__article-preview-paragraph">
+              {block.content}
+            </p>
+          )
+        })}
+      </div>
+    )
+  }
+
+  const renderReporterPreviewSidebar = (previewSubmission) => (
+    <aside className="employee-dashboard__preview-sidebar">
+      <div className="employee-dashboard__preview-sidebar-head">
+        <div className="employee-dashboard__preview-sidebar-tabs">
+          <button type="button" className="employee-dashboard__preview-sidebar-tab employee-dashboard__preview-sidebar-tab--active">
+            Post
+          </button>
+        </div>
+      </div>
+
+      <div className="employee-dashboard__preview-sidebar-body">
+        <section className="employee-dashboard__preview-panel">
+          <div className="employee-dashboard__preview-panel-head">
+            <h4>AIOSEO</h4>
+          </div>
+
+          <div className="employee-dashboard__preview-checks">
+            {reporterDraftSeoChecks.map((check) => (
+              <div key={check.label} className="employee-dashboard__preview-check">
+                <span
+                  className={`employee-dashboard__preview-check-indicator employee-dashboard__preview-check-indicator--${check.tone}`}
+                >
+                  {check.tone === 'good' ? '✓' : '!'}
+                </span>
+                <div>
+                  <strong>{check.label}:</strong> <span>{check.value}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="employee-dashboard__preview-panel">
+          <div className="employee-dashboard__preview-panel-head">
+            <h4>Selected pages</h4>
+          </div>
+          <div className="employee-dashboard__story-tags">
+            {previewSubmission.targetPages.length ? (
+              previewSubmission.targetPages.map((page) => (
+                <span key={page} className="employee-dashboard__story-tag">
+                  {reporterPublishPages.find((entry) => entry.value === page)?.label ?? page}
+                </span>
+              ))
+            ) : (
+              <span className="employee-dashboard__story-tag employee-dashboard__story-tag--muted">
+                No pages selected
+              </span>
+            )}
+          </div>
+        </section>
+
+        <section className="employee-dashboard__preview-panel">
+          <div className="employee-dashboard__preview-panel-head">
+            <h4>Tags</h4>
+          </div>
+          <div className="employee-dashboard__story-tags">
+            {previewSubmission.tags.length ? (
+              previewSubmission.tags.map((tag) => (
+                <span key={tag} className="employee-dashboard__story-tag">
+                  {tag}
+                </span>
+              ))
+            ) : (
+              <span className="employee-dashboard__story-tag employee-dashboard__story-tag--muted">
+                No tags
+              </span>
+            )}
+          </div>
+        </section>
+      </div>
+    </aside>
+  )
 
   if (isReporter) {
     return (
@@ -1034,128 +2141,74 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
                       </div>
                     </div>
 
-                    <label className="employee-auth__field">
-                      <span>Title</span>
-                      <input
-                        type="text"
-                        name="title"
-                        placeholder="Enter report title"
-                        value={reporterForm.title}
-                        onChange={handleReporterFieldChange('title')}
-                        lang="hi"
-                        dir="auto"
-                        required
-                      />
-                    </label>
-
-                    <label className="employee-auth__field">
-                      <span>Short summary</span>
-                      <textarea
-                        rows="4"
-                        name="summary"
-                        placeholder="Write a short report summary"
-                        value={reporterForm.summary}
-                        onChange={handleReporterFieldChange('summary')}
-                        lang="hi"
-                        dir="auto"
-                        required
-                      />
-                    </label>
-
-                    <label className="employee-auth__field">
-                      <span>Image upload</span>
-                      <input type="file" accept="image/*" onChange={handleReporterImageChange} />
-                    </label>
-
-                    {reporterForm.imageFile ? (
-                      <div className="employee-dashboard__upload-note">
-                        <strong>{reporterForm.imageFile.name}</strong>
-                        <span>Image selected for review submission</span>
-                      </div>
-                    ) : null}
-
-                    <div className="employee-auth__field">
-                      <span>Article content</span>
-                      <div className="employee-dashboard__block-actions">
-                        <button
-                          type="button"
-                          className="employee-dashboard__secondary-button"
-                          onClick={() => handleAddReporterBlock('heading')}
-                        >
-                          Add subheading
-                        </button>
-                        <button
-                          type="button"
-                          className="employee-dashboard__secondary-button"
-                          onClick={() => handleAddReporterBlock('paragraph')}
-                        >
-                          Add paragraph
-                        </button>
-                      </div>
-
-                      <div className="employee-dashboard__blocks">
-                        {reporterForm.contentBlocks.map((block, index) => (
-                          <div key={block.id} className="employee-dashboard__block-card">
-                            <div className="employee-dashboard__block-head">
-                              <strong>
-                                {getReporterBlockLabel(reporterForm.contentBlocks, block, index)}
-                              </strong>
-                              <div className="employee-dashboard__block-tools">
-                                <select
-                                  value={block.type}
-                                  onChange={handleReporterBlockChange(block.id, 'type')}
-                                >
-                                  <option value="">Select type</option>
-                                  <option value="paragraph">Paragraph</option>
-                                  <option value="heading">Subheading</option>
-                                </select>
-                                <button
-                                  type="button"
-                                  className="employee-dashboard__remove-button"
-                                  onClick={() => handleRemoveReporterBlock(block.id)}
-                                  disabled={reporterForm.contentBlocks.length === 1}
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            </div>
-                            <textarea
-                              rows={block.type === 'heading' ? 2 : 6}
-                              placeholder={
-                                block.type === 'heading'
-                                  ? 'Write subheading'
-                                  : block.type === 'paragraph'
-                                    ? 'Write paragraph content'
-                                    : 'Select block type first'
-                              }
-                              value={block.content}
-                              onChange={handleReporterBlockChange(block.id, 'content')}
-                              lang="hi"
-                              dir="auto"
-                              required={index === 0}
-                              disabled={!block.type}
-                            />
-                          </div>
-                        ))}
+                    <div className="employee-dashboard__preview-layout">
+                      <div className="employee-dashboard__preview-canvas employee-dashboard__preview-canvas--editor">
+                        <div className="employee-auth__field">
+                          <span>Article document</span>
+                          <p className="employee-dashboard__composer-note">
+                            Start with the title, then click the plus button to choose the next block.
+                          </p>
+                          {renderDocumentComposer({
+                            scope: 'reporter',
+                            blocks: reporterForm.documentBlocks,
+                            onBlockChange: handleReporterBlockChange,
+                            onImageChange: handleReporterDocumentImageChange,
+                            onRemoveBlock: handleRemoveReporterBlock,
+                            onAddBlock: handleAddReporterBlock,
+                            onAddPattern: handleAddReporterPattern,
+                          })}
+                        </div>
                       </div>
                     </div>
 
-                    <label className="employee-auth__field">
-                      <span>Tags</span>
-                      <input
-                        type="text"
-                        name="tags"
-                        placeholder="Comma separated tags"
-                        value={reporterForm.tags}
-                        onChange={handleReporterFieldChange('tags')}
-                        lang="hi"
-                        dir="auto"
-                      />
-                    </label>
+                    <div
+                      className={`employee-dashboard__reporter-preview-row${
+                        isReporterPreviewOpen ? ' employee-dashboard__reporter-preview-row--with-sidebar' : ''
+                      }`}
+                    >
+                      <div className="employee-dashboard__reporter-preview-controls">
+                        <label className="employee-auth__field">
+                          <span>Tags</span>
+                          <input
+                            type="text"
+                            name="tags"
+                            placeholder="Comma separated tags"
+                            value={reporterForm.tags}
+                            onChange={handleReporterFieldChange('tags')}
+                            lang="hi"
+                            dir="auto"
+                          />
+                        </label>
 
-                    <button type="submit" className="employee-auth__primary">
-                      Send to editor review
-                    </button>
+                        <label className="employee-auth__field">
+                          <span>Focus keyword</span>
+                          <input
+                            type="text"
+                            name="focusKeyword"
+                            placeholder="Main SEO keyword"
+                            value={reporterForm.focusKeyword}
+                            onChange={handleReporterFieldChange('focusKeyword')}
+                            lang="hi"
+                            dir="auto"
+                          />
+                        </label>
+
+                        <div className="employee-dashboard__editor-actions">
+                          <button
+                            type="button"
+                            className="employee-dashboard__secondary-button"
+                            onClick={() => setIsReporterPreviewOpen((current) => !current)}
+                          >
+                            {isReporterPreviewOpen ? 'Hide preview' : 'Preview draft'}
+                          </button>
+                          <button type="submit" className="employee-auth__primary">
+                            Send to editor review
+                          </button>
+                        </div>
+                      </div>
+
+                      {isReporterPreviewOpen ? renderReporterPreviewSidebar(reporterDraftPreview) : null}
+                    </div>
                   </form>
                 </article>
               </section>
@@ -1208,27 +2261,7 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
                               </span>
                             </div>
 
-                            {submission.image?.previewUrl ? (
-                              <img
-                                src={submission.image.previewUrl}
-                                alt={submission.title}
-                                className="employee-dashboard__story-image"
-                              />
-                            ) : null}
-
-                            <div className="employee-dashboard__story-content">
-                              {(submission.contentBlocks || []).map((block) =>
-                                block.type === 'heading' ? (
-                                  <h5 key={block.id} className="employee-dashboard__story-subheading">
-                                    {block.content}
-                                  </h5>
-                                ) : (
-                                  <p key={block.id} className="employee-dashboard__story-paragraph">
-                                    {block.content}
-                                  </p>
-                                ),
-                              )}
-                            </div>
+                            {renderSubmissionDocumentPreview(submission)}
 
                             <div className="employee-dashboard__story-tags">
                               {submission.tags.length ? (
@@ -1317,6 +2350,52 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
               <article className="employee-auth__card">
                 <div className="employee-dashboard__section-head employee-dashboard__section-head--table">
                   <div>
+                    <h3>E-paper and magazine upload</h3>
+                    <p>
+                      Upload today&apos;s publication file from the editor desk. The issue date is
+                      automatically set to the current upload date.
+                    </p>
+                  </div>
+                </div>
+
+                <form className="employee-dashboard__editor-form" onSubmit={handlePublicationIssueUpload}>
+                  <label className="employee-auth__field">
+                    <span>Publication type</span>
+                    <select
+                      value={publicationIssueForm.type}
+                      onChange={handlePublicationIssueFieldChange('type')}
+                    >
+                      <option value="epaper">E-paper</option>
+                      <option value="magazine">E-magazine</option>
+                    </select>
+                  </label>
+
+                  <label className="employee-auth__field">
+                    <span>PDF file</span>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handlePublicationIssueFileChange}
+                    />
+                  </label>
+
+                  <div className="employee-dashboard__list">
+                    <p className="employee-dashboard__list-item">
+                      Upload date: <strong>{new Date().toLocaleDateString('en-CA')}</strong>
+                    </p>
+                  </div>
+
+                  <div className="employee-dashboard__editor-actions">
+                    <button type="submit" className="employee-auth__primary">
+                      Upload publication
+                    </button>
+                  </div>
+                </form>
+              </article>
+
+              <article className="employee-auth__card">
+                <div className="employee-dashboard__section-head employee-dashboard__section-head--table">
+                  <div>
                     <h3>Submitted articles</h3>
                     <p>
                       Review all stories submitted by reporters. Click any article to open the
@@ -1372,27 +2451,7 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
                             </span>
                           </div>
 
-                          {submission.image?.previewUrl ? (
-                            <img
-                              src={submission.image.previewUrl}
-                              alt={submission.title}
-                              className="employee-dashboard__story-image"
-                            />
-                          ) : null}
-
-                          <div className="employee-dashboard__story-content">
-                            {(submission.contentBlocks || []).map((block) =>
-                              block.type === 'heading' ? (
-                                <h5 key={block.id} className="employee-dashboard__story-subheading">
-                                  {block.content}
-                                </h5>
-                              ) : (
-                                <p key={block.id} className="employee-dashboard__story-paragraph">
-                                  {block.content}
-                                </p>
-                              ),
-                            )}
-                          </div>
+                          {renderSubmissionDocumentPreview(submission)}
 
                           <div className="employee-dashboard__story-tags">
                             {submission.tags.length ? (
@@ -1408,6 +2467,12 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
                             )}
                           </div>
 
+                          <div className="employee-dashboard__story-tags">
+                            <span className="employee-dashboard__story-tag employee-dashboard__story-tag--muted">
+                              Focus keyword: {submission.seo?.focusKeyword || 'Not set'}
+                            </span>
+                          </div>
+
                           <div className="employee-dashboard__editor-actions">
                             <button
                               type="button"
@@ -1421,28 +2486,6 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
                           {editingEditorSubmissionId === submission.id ? (
                             <div className="employee-dashboard__editor-form">
                               <label className="employee-auth__field">
-                                <span>Title</span>
-                                <input
-                                  type="text"
-                                  value={editorEditForm.title}
-                                  onChange={handleEditorEditFieldChange('title')}
-                                  lang="hi"
-                                  dir="auto"
-                                />
-                              </label>
-
-                              <label className="employee-auth__field">
-                                <span>Short summary</span>
-                                <textarea
-                                  rows="4"
-                                  value={editorEditForm.summary}
-                                  onChange={handleEditorEditFieldChange('summary')}
-                                  lang="hi"
-                                  dir="auto"
-                                />
-                              </label>
-
-                              <label className="employee-auth__field">
                                 <span>Tags</span>
                                 <input
                                   type="text"
@@ -1454,59 +2497,19 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
                               </label>
 
                               <div className="employee-auth__field">
-                                <span>Article content</span>
-                                <div className="employee-dashboard__block-actions">
-                                  <button
-                                    type="button"
-                                    className="employee-dashboard__secondary-button"
-                                    onClick={() => handleEditorAddBlock('heading')}
-                                  >
-                                    Add subheading
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="employee-dashboard__secondary-button"
-                                    onClick={() => handleEditorAddBlock('paragraph')}
-                                  >
-                                    Add paragraph
-                                  </button>
-                                </div>
-
-                                <div className="employee-dashboard__blocks">
-                                  {editorEditForm.contentBlocks.map((block, index) => (
-                                    <div key={block.id} className="employee-dashboard__block-card">
-                                      <div className="employee-dashboard__block-head">
-                                        <strong>
-                                          {getReporterBlockLabel(editorEditForm.contentBlocks, block, index)}
-                                        </strong>
-                                        <div className="employee-dashboard__block-tools">
-                                          <select
-                                            value={block.type}
-                                            onChange={handleEditorBlockChange(block.id, 'type')}
-                                          >
-                                            <option value="paragraph">Paragraph</option>
-                                            <option value="heading">Subheading</option>
-                                          </select>
-                                          <button
-                                            type="button"
-                                            className="employee-dashboard__remove-button"
-                                            onClick={() => handleEditorRemoveBlock(block.id)}
-                                            disabled={editorEditForm.contentBlocks.length === 1}
-                                          >
-                                            Remove
-                                          </button>
-                                        </div>
-                                      </div>
-                                      <textarea
-                                        rows={block.type === 'heading' ? 2 : 6}
-                                        value={block.content}
-                                        onChange={handleEditorBlockChange(block.id, 'content')}
-                                        lang="hi"
-                                        dir="auto"
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
+                                <span>Article document</span>
+                                <p className="employee-dashboard__composer-note">
+                                  Edit the story in the same flow as the reporter document.
+                                </p>
+                                {renderDocumentComposer({
+                                  scope: 'editor',
+                                  blocks: editorEditForm.documentBlocks,
+                                  onBlockChange: handleEditorBlockChange,
+                                  onImageChange: handleEditorDocumentImageChange,
+                                  onRemoveBlock: handleEditorRemoveBlock,
+                                  onAddBlock: handleEditorAddBlock,
+                                  onAddPattern: handleEditorAddPattern,
+                                })}
                               </div>
 
                               <div className="employee-dashboard__editor-actions">
@@ -1646,6 +2649,91 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
                                     : 'Select one or more homepage sections, then click Place article.'
                                   : 'Publish or schedule the article first, then assign it to a homepage section.'}
                               </p>
+
+                              <div className="employee-auth__field">
+                                <span>Sidebar widgets stories</span>
+                                <div className="employee-dashboard__placement-dropdown">
+                                  <button
+                                    type="button"
+                                    className="employee-dashboard__placement-trigger"
+                                    onClick={toggleSidebarPlacementMenu(submission.id)}
+                                    disabled={
+                                      submission.status !== 'published' &&
+                                      submission.status !== 'scheduled'
+                                    }
+                                    aria-expanded={openSidebarPlacementMenus[submission.id] ? 'true' : 'false'}
+                                  >
+                                    <span>
+                                      {(sidebarPlacementSelections[submission.id] ?? []).length
+                                        ? SIDEBAR_STORY_PLACEMENT_SLOTS.filter((slot) =>
+                                            (sidebarPlacementSelections[submission.id] ?? []).includes(slot.key),
+                                          )
+                                            .map((slot) => `${slot.section} - ${slot.label}`)
+                                            .join(', ')
+                                        : 'Select sidebar story slots'}
+                                    </span>
+                                    <span className="employee-dashboard__placement-trigger-icon">▼</span>
+                                  </button>
+
+                                  {openSidebarPlacementMenus[submission.id] ? (
+                                    <div className="employee-dashboard__placement-menu">
+                                      <div className="employee-dashboard__placement-picker">
+                                        {SIDEBAR_STORY_PLACEMENT_SLOTS.map((slot) => (
+                                          <label
+                                            key={slot.key}
+                                            className={`employee-dashboard__placement-option${
+                                              (sidebarPlacementSelections[submission.id] ?? []).includes(slot.key)
+                                                ? ' employee-dashboard__placement-option--selected'
+                                                : ''
+                                            }${
+                                              submission.status !== 'published' &&
+                                              submission.status !== 'scheduled'
+                                                ? ' employee-dashboard__placement-option--disabled'
+                                                : ''
+                                            }`}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={(sidebarPlacementSelections[submission.id] ?? []).includes(slot.key)}
+                                              onChange={handleSidebarPlacementToggle(submission.id, slot.key)}
+                                              disabled={
+                                                submission.status !== 'published' &&
+                                                submission.status !== 'scheduled'
+                                              }
+                                            />
+                                            <span className="employee-dashboard__placement-option-text">
+                                              <strong>{slot.section}</strong>
+                                              <small>{slot.label}</small>
+                                            </span>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </div>
+
+                              {submission.status === 'published' || submission.status === 'scheduled' ? (
+                                <div className="employee-dashboard__editor-actions">
+                                  <button
+                                    type="button"
+                                    className="employee-auth__primary"
+                                    onClick={() => handleSidebarPlacementApply(submission.id)}
+                                  >
+                                    Place in sidebar
+                                  </button>
+                                </div>
+                              ) : null}
+
+                              <p className="employee-dashboard__placement-note">
+                                {submission.status === 'published' || submission.status === 'scheduled'
+                                  ? getAssignedSidebarSlots(submission.id).length
+                                    ? `This article is currently assigned to ${getAssignedSidebarSlots(submission.id)
+                                        .map((slot) => slot.label)
+                                        .join(', ')} in SidebarWidgets.`
+                                    : 'Select one or more sidebar slots, then click Place in sidebar.'
+                                  : 'Publish or schedule the article first, then assign it to the sidebar widgets.'}
+                              </p>
                             </div>
                           ) : null}
 
@@ -1773,19 +2861,23 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
               <article className="employee-auth__card">
                 <div className="employee-dashboard__section-head employee-dashboard__section-head--table">
                   <div>
-                    <h3>Published article SEO panel</h3>
+                    <h3>Reporter articles SEO panel</h3>
                     <p>
-                      Open a published article and manage only its search and social metadata fields.
+                      See all reporter articles first, then open one article to edit only its title,
+                      focus keyword, and summary.
                     </p>
                   </div>
                   <span className="employee-dashboard__table-count">
-                    {seoEligibleSubmissions.length} eligible articles
+                    {seoArticleSubmissions.length} articles
                   </span>
                 </div>
 
-                {seoEligibleSubmissions.length ? (
+                {seoArticleSubmissions.length ? (
                   <div className="employee-dashboard__stories">
-                    {seoEligibleSubmissions.map((submission) => (
+                    {seoArticleSubmissions.map((submission) => {
+                      const canSeoEditSubmission = submission.status === 'review_pending'
+
+                      return (
                       <article key={submission.id} className="employee-dashboard__story-card">
                         <button
                           type="button"
@@ -1825,52 +2917,45 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
                           <div className="employee-dashboard__story-details">
                             <div className="employee-dashboard__story-meta">
                               <span className="employee-dashboard__story-date">
-                                Published article content is locked for SEO.
+                                {new Date(submission.submittedAt).toLocaleString()}
                               </span>
                               <span className="employee-dashboard__story-pages">
                                 {submission.targetPages.join(', ')}
                               </span>
                             </div>
 
-                            <div className="employee-dashboard__list">
-                              <p className="employee-dashboard__list-item">
-                                Reporter headline: {submission.title}
-                              </p>
-                              <p className="employee-dashboard__list-item">
-                                Reporter summary: {submission.summary}
-                              </p>
-                              <p className="employee-dashboard__list-item">
-                                Title/body editing is disabled for the SEO role.
-                              </p>
+                            {renderSubmissionDocumentPreview(submission)}
+
+                            <div className="employee-dashboard__story-tags">
+                              {submission.tags.length ? (
+                                submission.tags.map((tag) => (
+                                  <span key={`${submission.id}-${tag}`} className="employee-dashboard__story-tag">
+                                    {tag}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="employee-dashboard__story-tag employee-dashboard__story-tag--muted">
+                                  No tags
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="employee-dashboard__story-tags">
+                              <span className="employee-dashboard__story-tag employee-dashboard__story-tag--muted">
+                                Focus keyword: {submission.seo?.focusKeyword || 'Not set'}
+                              </span>
                             </div>
 
                             {seoEditingSubmissionId === submission.id ? (
                               <div className="employee-dashboard__editor-form">
                                 <label className="employee-auth__field">
-                                  <span>Meta title</span>
+                                  <span>Article title</span>
                                   <input
                                     type="text"
-                                    value={seoEditForm.metaTitle}
-                                    onChange={handleSeoFieldChange('metaTitle')}
-                                  />
-                                </label>
-
-                                <label className="employee-auth__field">
-                                  <span>Meta description</span>
-                                  <textarea
-                                    rows="4"
-                                    value={seoEditForm.metaDescription}
-                                    onChange={handleSeoFieldChange('metaDescription')}
-                                  />
-                                </label>
-
-                                <label className="employee-auth__field">
-                                  <span>Canonical URL</span>
-                                  <input
-                                    type="url"
-                                    value={seoEditForm.canonicalUrl}
-                                    onChange={handleSeoFieldChange('canonicalUrl')}
-                                    placeholder="https://newgindia.com/article-slug"
+                                    value={seoEditForm.title}
+                                    onChange={handleSeoFieldChange('title')}
+                                    lang="hi"
+                                    dir="auto"
                                   />
                                 </label>
 
@@ -1884,30 +2969,13 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
                                 </label>
 
                                 <label className="employee-auth__field">
-                                  <span>OG title</span>
-                                  <input
-                                    type="text"
-                                    value={seoEditForm.ogTitle}
-                                    onChange={handleSeoFieldChange('ogTitle')}
-                                  />
-                                </label>
-
-                                <label className="employee-auth__field">
-                                  <span>OG description</span>
+                                  <span>Summary</span>
                                   <textarea
                                     rows="4"
-                                    value={seoEditForm.ogDescription}
-                                    onChange={handleSeoFieldChange('ogDescription')}
-                                  />
-                                </label>
-
-                                <label className="employee-auth__field">
-                                  <span>OG image URL</span>
-                                  <input
-                                    type="url"
-                                    value={seoEditForm.ogImageUrl}
-                                    onChange={handleSeoFieldChange('ogImageUrl')}
-                                    placeholder="https://example.com/og-image.jpg"
+                                    value={seoEditForm.summary}
+                                    onChange={handleSeoFieldChange('summary')}
+                                    lang="hi"
+                                    dir="auto"
                                   />
                                 </label>
 
@@ -1917,7 +2985,7 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
                                     className="employee-auth__primary"
                                     onClick={() => handleSeoSave(submission.id)}
                                   >
-                                    Save SEO fields
+                                    Save changes
                                   </button>
                                   <button
                                     type="button"
@@ -1930,77 +2998,32 @@ function EmployeeDashboardPage({ employeeSession, onLogout }) {
                               </div>
                             ) : (
                               <>
-                                <div className="employee-dashboard__table-wrap">
-                                  <div className="employee-dashboard__table-head">
-                                    <span>Field</span>
-                                    <span>Current value</span>
-                                  </div>
-
-                                  <div className="employee-dashboard__table-body">
-                                    <div className="employee-dashboard__table-row">
-                                      <div className="employee-dashboard__table-cell"><strong>Meta title</strong></div>
-                                      <div className="employee-dashboard__table-cell">
-                                        <span>{submission.seo?.metaTitle || 'Not set'}</span>
-                                      </div>
-                                    </div>
-                                    <div className="employee-dashboard__table-row">
-                                      <div className="employee-dashboard__table-cell"><strong>Meta description</strong></div>
-                                      <div className="employee-dashboard__table-cell">
-                                        <span>{submission.seo?.metaDescription || 'Not set'}</span>
-                                      </div>
-                                    </div>
-                                    <div className="employee-dashboard__table-row">
-                                      <div className="employee-dashboard__table-cell"><strong>Canonical URL</strong></div>
-                                      <div className="employee-dashboard__table-cell">
-                                        <span>{submission.seo?.canonicalUrl || 'Not set'}</span>
-                                      </div>
-                                    </div>
-                                    <div className="employee-dashboard__table-row">
-                                      <div className="employee-dashboard__table-cell"><strong>Focus keyword</strong></div>
-                                      <div className="employee-dashboard__table-cell">
-                                        <span>{submission.seo?.focusKeyword || 'Not set'}</span>
-                                      </div>
-                                    </div>
-                                    <div className="employee-dashboard__table-row">
-                                      <div className="employee-dashboard__table-cell"><strong>OG title</strong></div>
-                                      <div className="employee-dashboard__table-cell">
-                                        <span>{submission.seo?.ogTitle || 'Not set'}</span>
-                                      </div>
-                                    </div>
-                                    <div className="employee-dashboard__table-row">
-                                      <div className="employee-dashboard__table-cell"><strong>OG description</strong></div>
-                                      <div className="employee-dashboard__table-cell">
-                                        <span>{submission.seo?.ogDescription || 'Not set'}</span>
-                                      </div>
-                                    </div>
-                                    <div className="employee-dashboard__table-row">
-                                      <div className="employee-dashboard__table-cell"><strong>OG image URL</strong></div>
-                                      <div className="employee-dashboard__table-cell">
-                                        <span>{submission.seo?.ogImageUrl || 'Not set'}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
                                 <div className="employee-dashboard__editor-actions">
-                                  <button
-                                    type="button"
-                                    className="employee-dashboard__secondary-button"
-                                    onClick={() => startSeoEdit(submission)}
-                                  >
-                                    Edit SEO fields
-                                  </button>
+                                  {canSeoEditSubmission ? (
+                                    <button
+                                      type="button"
+                                      className="employee-dashboard__secondary-button"
+                                      onClick={() => startSeoEdit(submission)}
+                                    >
+                                      Edit SEO
+                                    </button>
+                                  ) : (
+                                    <span className="employee-dashboard__placement-note">
+                                      SEO editing is locked after the editor publishes or schedules this article.
+                                    </span>
+                                  )}
                                 </div>
                               </>
                             )}
                           </div>
                         ) : null}
                       </article>
-                    ))}
+                      )
+                    })}
                   </div>
                 ) : (
                   <p className="employee-dashboard__empty">
-                    No published or scheduled articles are available yet for SEO optimization.
+                    No reporter articles are available yet for SEO optimization.
                   </p>
                 )}
               </article>

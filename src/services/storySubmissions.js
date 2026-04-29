@@ -1,4 +1,5 @@
 import { clearHomepagePlacementsForSubmission } from './homepagePlacements'
+import { clearSidebarPlacementsForSubmission } from './sidebarPlacements'
 
 const STORY_SUBMISSIONS_KEY = 'newgindia.story.submissions'
 export const STORY_SUBMISSIONS_CHANGE_EVENT = 'newgindia-story-submissions-change'
@@ -33,18 +34,184 @@ function buildStorySlug(title = '') {
   return normalized || `story-${Date.now()}`
 }
 
-function buildArticleBlocks(summary, contentBlocks) {
-  const introBlock = summary
-    ? [{ type: 'paragraph', content: summary }]
-    : []
+function parseListItems(content = '') {
+  return String(content)
+    .split('\n')
+    .map((item) => item.replace(/^[-*•\d.\s]+/, '').trim())
+    .filter(Boolean)
+}
 
-  return [
-    ...introBlock,
-    ...contentBlocks.map((block) => ({
+function parseTableRows(content = '') {
+  return String(content)
+    .split('\n')
+    .map((row) => row.split('|').map((cell) => cell.trim()).filter(Boolean))
+    .filter((row) => row.length)
+}
+
+function buildPublicBlocksFromDocumentBlocks(documentBlocks = []) {
+  return documentBlocks.flatMap((block) => {
+    if (block.type === 'title' || block.type === 'summary' || block.type === 'image') {
+      return []
+    }
+
+    if (block.type === 'list') {
+      const items = parseListItems(block.content)
+      return items.length ? [{ type: 'list', items }] : []
+    }
+
+    if (block.type === 'table') {
+      const rows = parseTableRows(block.content)
+      return rows.length ? [{ type: 'table', rows }] : []
+    }
+
+    if (block.type === 'quote' || block.type === 'code' || block.type === 'details') {
+      return [{ type: block.type, content: block.content }]
+    }
+
+    return [
+      {
+        type: block.type === 'heading' ? 'heading' : 'paragraph',
+        content: block.content,
+      },
+    ]
+  })
+}
+
+function normalizeDocumentBlocks(documentBlocks = []) {
+  return documentBlocks
+    .map((block, index) => {
+      const nextType = String(block?.type ?? '').trim()
+
+      if (!nextType) {
+        return null
+      }
+
+      if (nextType === 'image') {
+        const previewUrl = String(
+          block?.image?.previewUrl ?? block?.previewUrl ?? block?.content ?? '',
+        ).trim()
+
+        if (!previewUrl) {
+          return null
+        }
+
+        return {
+          id: block?.id ?? `document-block-${index + 1}`,
+          type: 'image',
+          image: {
+            type: block?.image?.type ?? block?.imageType ?? 'upload',
+            name: block?.image?.name ?? block?.name ?? '',
+            mimeType: block?.image?.mimeType ?? block?.mimeType ?? '',
+            size: block?.image?.size ?? block?.size ?? 0,
+            previewUrl,
+          },
+          caption: String(block?.caption ?? '').trim(),
+        }
+      }
+
+      const normalizedContent = String(block?.content ?? '').trim()
+
+      if (!normalizedContent) {
+        return null
+      }
+
+      return {
+        id: block?.id ?? `document-block-${index + 1}`,
+        type: nextType,
+        content: normalizedContent,
+      }
+    })
+    .filter(Boolean)
+}
+
+function buildDocumentBlocksFromLegacy(submission = {}) {
+  const documentBlocks = []
+
+  if (submission.title) {
+    documentBlocks.push({
+      id: 'legacy-title-block',
+      type: 'title',
+      content: submission.title,
+    })
+  }
+
+  if (submission.summary) {
+    documentBlocks.push({
+      id: 'legacy-summary-block',
+      type: 'summary',
+      content: submission.summary,
+    })
+  }
+
+  if (submission.image?.previewUrl) {
+    documentBlocks.push({
+      id: 'legacy-image-block',
+      type: 'image',
+      image: {
+        type: submission.image.type ?? 'upload',
+        name: submission.image.name ?? '',
+        mimeType: submission.image.mimeType ?? '',
+        size: submission.image.size ?? 0,
+        previewUrl: submission.image.previewUrl,
+      },
+      caption: submission.image.caption ?? '',
+    })
+  }
+
+  ;(submission.contentBlocks ?? []).forEach((block, index) => {
+    documentBlocks.push({
+      id: block.id ?? `legacy-body-block-${index + 1}`,
       type: block.type === 'heading' ? 'heading' : 'paragraph',
+      content: block.content ?? '',
+    })
+  })
+
+  return normalizeDocumentBlocks(documentBlocks)
+}
+
+function deriveSubmissionFields(documentBlocks = [], fallbackSubmission = {}) {
+  const normalizedBlocks = normalizeDocumentBlocks(documentBlocks)
+  const titleBlock = normalizedBlocks.find((block) => block.type === 'title')
+  const summaryBlock = normalizedBlocks.find((block) => block.type === 'summary')
+  const imageBlock = normalizedBlocks.find((block) => block.type === 'image')
+  const contentBlocks = normalizedBlocks
+    .filter((block) => block.type !== 'title' && block.type !== 'summary' && block.type !== 'image')
+    .map((block) => ({
+      id: block.id,
+      type: block.type,
       content: block.content,
-    })),
-  ]
+    }))
+  const fallbackBodySummary =
+    contentBlocks.find((block) => block.type === 'paragraph' || block.type === 'quote')?.content ?? ''
+  const normalizedFallbackSummary = String(fallbackSubmission.summary ?? '').trim()
+  const derivedSummarySource =
+    summaryBlock?.content || normalizedFallbackSummary || fallbackBodySummary
+  const derivedSummary =
+    derivedSummarySource && derivedSummarySource.length > 220
+      ? `${derivedSummarySource.slice(0, 217).trim()}...`
+      : derivedSummarySource
+
+  return {
+    documentBlocks: normalizedBlocks,
+    title: titleBlock?.content ?? String(fallbackSubmission.title ?? '').trim(),
+    summary: derivedSummary || fallbackBodySummary,
+    image: imageBlock?.image
+      ? {
+          ...imageBlock.image,
+          caption: imageBlock.caption ?? '',
+        }
+      : fallbackSubmission.image?.previewUrl
+        ? {
+            type: fallbackSubmission.image.type ?? 'upload',
+            name: fallbackSubmission.image.name ?? '',
+            mimeType: fallbackSubmission.image.mimeType ?? '',
+            size: fallbackSubmission.image.size ?? 0,
+            previewUrl: String(fallbackSubmission.image.previewUrl).trim(),
+            caption: fallbackSubmission.image.caption ?? '',
+          }
+        : null,
+    contentBlocks,
+  }
 }
 
 function buildStorySections(targetPages = []) {
@@ -87,21 +254,22 @@ function isScheduledSubmissionDue(submission) {
 }
 
 function normalizeSubmission(submission) {
+  const documentBlocksSource =
+    Array.isArray(submission.documentBlocks) && submission.documentBlocks.length
+      ? submission.documentBlocks
+      : buildDocumentBlocksFromLegacy(submission)
+  const derivedSubmissionFields = deriveSubmissionFields(documentBlocksSource, submission)
+
   const nextSubmission = {
     ...submission,
-    title: String(submission.title ?? '').trim(),
-    summary: String(submission.summary ?? '').trim(),
+    title: derivedSubmissionFields.title,
+    summary: derivedSubmissionFields.summary,
     tags: Array.isArray(submission.tags)
       ? submission.tags.map((tag) => String(tag).trim()).filter(Boolean)
       : [],
-    contentBlocks: Array.isArray(submission.contentBlocks)
-      ? submission.contentBlocks
-          .map((block) => ({
-            ...block,
-            content: String(block.content ?? '').trim(),
-          }))
-          .filter((block) => block.content)
-      : [],
+    image: derivedSubmissionFields.image,
+    contentBlocks: derivedSubmissionFields.contentBlocks,
+    documentBlocks: derivedSubmissionFields.documentBlocks,
     editorReview: {
       state: submission.editorReview?.state ?? 'pending',
       reviewedAt: submission.editorReview?.reviewedAt ?? null,
@@ -159,7 +327,7 @@ export function buildPublicArticlePayload(submission) {
     publishedAt: submission.submittedAt,
     heroImageUrl: submission.image?.previewUrl ?? '',
     heroImageClass: '',
-    blocks: buildArticleBlocks(submission.summary, submission.contentBlocks),
+    blocks: buildPublicBlocksFromDocumentBlocks(submission.documentBlocks ?? []),
     tags: submission.tags,
     categoryChips: storySections.slice(0, 2).map((section) => section.label),
     storySections,
@@ -168,7 +336,6 @@ export function buildPublicArticlePayload(submission) {
       metaTitle: submission.seo?.metaTitle ?? '',
       metaDescription: submission.seo?.metaDescription ?? '',
       canonicalUrl: submission.seo?.canonicalUrl ?? '',
-      focusKeyword: submission.seo?.focusKeyword ?? '',
       ogTitle: submission.seo?.ogTitle ?? '',
       ogDescription: submission.seo?.ogDescription ?? '',
       ogImageUrl: submission.seo?.ogImageUrl ?? '',
@@ -194,7 +361,6 @@ export function buildPublicStorySummary(submission) {
     tags: submission.tags,
     storySections,
     seo: {
-      focusKeyword: submission.seo?.focusKeyword ?? '',
       metaTitle: submission.seo?.metaTitle ?? '',
     },
   }
@@ -397,10 +563,74 @@ export function updateStorySeo(submissionId, seoUpdates = {}, reviewer = null) {
   })
 }
 
+export function updateStorySeoArticleFields(
+  submissionId,
+  { title = '', summary = '', focusKeyword = '' } = {},
+  reviewer = null,
+) {
+  const currentSubmission = getStorySubmissions().find((submission) => submission.id === submissionId)
+
+  if (!currentSubmission) {
+    return null
+  }
+
+  if (currentSubmission.status !== 'review_pending') {
+    return null
+  }
+
+  const normalizedTitle = String(title).trim()
+  const normalizedSummary = String(summary).trim()
+
+  if (!normalizedTitle || !normalizedSummary) {
+    return null
+  }
+
+  const currentDocumentBlocks = normalizeDocumentBlocks(
+    currentSubmission.documentBlocks?.length
+      ? currentSubmission.documentBlocks
+      : buildDocumentBlocksFromLegacy(currentSubmission),
+  )
+  const currentTitleBlock = currentDocumentBlocks.find((block) => block.type === 'title')
+  const currentSummaryBlock = currentDocumentBlocks.find((block) => block.type === 'summary')
+  const bodyDocumentBlocks = currentDocumentBlocks.filter(
+    (block) => block.type !== 'title' && block.type !== 'summary',
+  )
+  const nextDocumentBlocks = [
+    {
+      id: currentTitleBlock?.id ?? 'seo-title-block',
+      type: 'title',
+      content: normalizedTitle,
+    },
+    {
+      id: currentSummaryBlock?.id ?? 'seo-summary-block',
+      type: 'summary',
+      content: normalizedSummary,
+    },
+    ...bodyDocumentBlocks,
+  ]
+  const nextSeo = normalizeSeoData(
+    {
+      ...currentSubmission.seo,
+      focusKeyword: String(focusKeyword).trim(),
+      updatedAt: nowIsoString(),
+      updatedBy: reviewer,
+    },
+    currentSubmission,
+  )
+
+  return updateStorySubmission(submissionId, {
+    title: normalizedTitle,
+    summary: normalizedSummary,
+    documentBlocks: nextDocumentBlocks,
+    seo: nextSeo,
+  })
+}
+
 export function deleteStorySubmission(submissionId) {
   const nextSubmissions = getStorySubmissions().filter((submission) => submission.id !== submissionId)
 
   clearHomepagePlacementsForSubmission(submissionId)
+  clearSidebarPlacementsForSubmission(submissionId)
   writeSubmissions(nextSubmissions)
 
   return true
@@ -413,29 +643,34 @@ export function createStorySubmission({
   summary,
   imageFile,
   contentBlocks,
+  documentBlocks,
   tags,
+  focusKeyword = '',
 }) {
   const normalizedTags = tags
     .split(',')
     .map((tag) => tag.trim())
     .filter(Boolean)
-  const normalizedBlocks = contentBlocks
-    .map((block) => ({
-      ...block,
-      content: block.content.trim(),
-    }))
-    .filter((block) => block.content)
-  const storyId = `story-${Date.now()}`
-  const storySlug = buildStorySlug(title)
-
-  const nextSubmission = {
-    id: storyId,
-    articleId: storyId,
-    slug: storySlug,
-    reporter,
-    targetPages,
-    title: title.trim(),
-    summary: summary.trim(),
+  const normalizedDocumentBlocks =
+    Array.isArray(documentBlocks) && documentBlocks.length
+      ? normalizeDocumentBlocks(documentBlocks)
+      : buildDocumentBlocksFromLegacy({
+          title,
+          summary,
+          image: imageFile
+            ? {
+                type: 'upload',
+                name: imageFile.name,
+                mimeType: imageFile.mimeType,
+                size: imageFile.size,
+                previewUrl: imageFile.previewUrl,
+              }
+            : null,
+          contentBlocks,
+        })
+  const derivedSubmissionFields = deriveSubmissionFields(normalizedDocumentBlocks, {
+    title,
+    summary,
     image: imageFile
       ? {
           type: 'upload',
@@ -445,7 +680,21 @@ export function createStorySubmission({
           previewUrl: imageFile.previewUrl,
         }
       : null,
-    contentBlocks: normalizedBlocks,
+  })
+  const storyId = `story-${Date.now()}`
+  const storySlug = buildStorySlug(derivedSubmissionFields.title)
+
+  const nextSubmission = {
+    id: storyId,
+    articleId: storyId,
+    slug: storySlug,
+    reporter,
+    targetPages,
+    title: derivedSubmissionFields.title,
+    summary: derivedSubmissionFields.summary,
+    image: derivedSubmissionFields.image,
+    contentBlocks: derivedSubmissionFields.contentBlocks,
+    documentBlocks: derivedSubmissionFields.documentBlocks,
     tags: normalizedTags,
     status: 'review_pending',
     submittedAt: new Date().toISOString(),
@@ -460,13 +709,18 @@ export function createStorySubmission({
       scheduledFor: null,
       publishedAt: null,
     },
-    seo: normalizeSeoData({}, {
-      image: imageFile
-        ? {
-            previewUrl: imageFile.previewUrl,
-          }
-        : null,
-    }),
+    seo: normalizeSeoData(
+      {
+        focusKeyword,
+      },
+      {
+        image: derivedSubmissionFields.image
+          ? {
+              previewUrl: derivedSubmissionFields.image.previewUrl,
+            }
+          : null,
+      },
+    ),
   }
   const normalizedSubmission = normalizeSubmission(nextSubmission)
 
@@ -474,4 +728,88 @@ export function createStorySubmission({
   writeSubmissions(nextSubmissions)
 
   return normalizedSubmission
+}
+
+export function buildStoryPreviewSubmission({
+  reporter,
+  targetPages = [],
+  title = '',
+  summary = '',
+  imageFile = null,
+  contentBlocks = [],
+  documentBlocks = [],
+  tags = '',
+  seo = {},
+} = {}) {
+  const normalizedTags = Array.isArray(tags)
+    ? tags.map((tag) => String(tag).trim()).filter(Boolean)
+    : String(tags)
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+  const normalizedDocumentBlocks =
+    Array.isArray(documentBlocks) && documentBlocks.length
+      ? normalizeDocumentBlocks(documentBlocks)
+      : buildDocumentBlocksFromLegacy({
+          title,
+          summary,
+          image: imageFile
+            ? {
+                type: 'upload',
+                name: imageFile.name,
+                mimeType: imageFile.mimeType,
+                size: imageFile.size,
+                previewUrl: imageFile.previewUrl,
+              }
+            : null,
+          contentBlocks,
+        })
+  const derivedSubmissionFields = deriveSubmissionFields(normalizedDocumentBlocks, {
+    title,
+    summary,
+    image: imageFile
+      ? {
+          type: 'upload',
+          name: imageFile.name,
+          mimeType: imageFile.mimeType,
+          size: imageFile.size,
+          previewUrl: imageFile.previewUrl,
+        }
+      : null,
+  })
+  const previewSubmission = normalizeSubmission({
+    id: `preview-${Date.now()}`,
+    articleId: `preview-${Date.now()}`,
+    slug: buildStorySlug(derivedSubmissionFields.title),
+    reporter: reporter ?? {
+      name: 'Preview Reporter',
+      email: 'preview@newgindia.com',
+      bio: '',
+    },
+    targetPages,
+    title: derivedSubmissionFields.title,
+    summary: derivedSubmissionFields.summary,
+    image: derivedSubmissionFields.image,
+    contentBlocks: derivedSubmissionFields.contentBlocks,
+    documentBlocks: derivedSubmissionFields.documentBlocks,
+    tags: normalizedTags,
+    status: 'preview',
+    submittedAt: nowIsoString(),
+    editorReview: {
+      state: 'pending',
+      reviewedAt: null,
+      reviewer: null,
+      notes: '',
+    },
+    publishing: {
+      mode: null,
+      scheduledFor: null,
+      publishedAt: null,
+    },
+    seo: normalizeSeoData(seo, {
+      image: derivedSubmissionFields.image,
+    }),
+  })
+
+  return previewSubmission
 }

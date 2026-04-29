@@ -1,6 +1,7 @@
 import './FooterSection.css'
 import { resolveFixedSocialHref } from '../utils/socialLinks'
 import qrCodeImage from '../assets/My_QR_Code_1-1024.jpeg'
+import brandLogo from '../assets/Logo 2.png'
 
 function SocialIcon({ type }) {
   if (type === 'whatsapp') {
@@ -64,11 +65,12 @@ function FooterSection({ content }) {
 
       <div className="site-footer__header">
         <div className="site-footer__brand">
-          <div className="site-footer__logo-mark">newG</div>
-          <div className="site-footer__brand-copy">
-            <strong>{brandTitle}</strong>
-            <span>{brandSubtitle}</span>
-          </div>
+          <img className="site-footer__brand-logo" src={brandLogo} alt={brandTitle ?? 'NewG India'} />
+          {brandSubtitle ? (
+            <div className="site-footer__brand-copy">
+              <span>{brandSubtitle}</span>
+            </div>
+          ) : null}
         </div>
 
         <div className="site-footer__social">

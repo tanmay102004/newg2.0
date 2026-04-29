@@ -196,3 +196,18 @@
     grid-auto-columns: minmax(176px, 198px);
   }
 }
+
+@media (max-width: 640px) {
+  .shorts-section__shell {
+    padding: 20px 14px 24px;
+  }
+
+  .shorts-section__rail {
+    grid-auto-columns: minmax(156px, 74vw);
+    gap: 14px;
+  }
+
+  .shorts-section__edge-control {
+    display: none;
+  }
+}

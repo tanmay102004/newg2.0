@@ -1,5 +1,10 @@
 import { resolveStorySections } from '../utils/storySections'
-import { getPublishedArticlePages, getPublishedStorySummaries } from '../services/storySubmissions'
+import {
+  getPublishedArticlePages,
+  getPublishedStorySubmissions,
+  getPublishedStorySummaries,
+} from '../services/storySubmissions'
+import { applySidebarStoryPlacements } from '../services/sidebarPlacements'
 
 const baseArticle = {
   id: 'default',
@@ -214,8 +219,15 @@ export function collectSummaryStories(content = {}) {
 }
 
 export function buildStoryFromArticle(article = {}) {
+  const firstNarrativeBlock = article.blocks?.find((block) =>
+    ['paragraph', 'quote', 'details', 'code'].includes(block.type),
+  )
+  const firstNarrativeContent =
+    firstNarrativeBlock?.type === 'details'
+      ? firstNarrativeBlock.content
+      : firstNarrativeBlock?.content
   const firstParagraph =
-    article.blocks?.find((block) => block.type === 'paragraph')?.content ??
+    firstNarrativeContent ??
     article.dek ??
     article.summary ??
     ''
@@ -240,11 +252,11 @@ function normalizeAuthorName(value = '') {
 }
 
 function mergeSidebarContent(baseSidebar = {}, sharedSidebar = {}) {
-  return {
+  return applySidebarStoryPlacements({
     relatedStories: sharedSidebar.relatedStories ?? baseSidebar.relatedStories ?? [],
     subscribeBox: sharedSidebar.subscribeBox ?? baseSidebar.subscribeBox ?? {},
     categories: sharedSidebar.categories ?? baseSidebar.categories ?? [],
-  }
+  }, getPublishedStorySubmissions())
 }
 
 function mergeSummaryIntoArticle(template, summary, articleId, blocksOverride) {

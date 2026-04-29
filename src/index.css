@@ -25,6 +25,7 @@
 html {
   font-size: 93.75%;
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 body {
@@ -32,6 +33,7 @@ body {
   min-width: 320px;
   font-family: var(--font-body);
   font-size: 1rem;
+  overflow-x: hidden;
 }
 
 h1,
@@ -63,4 +65,36 @@ a {
 img {
   display: block;
   max-width: 100%;
+}
+
+input,
+textarea,
+select,
+button {
+  max-width: 100%;
+}
+
+a,
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+span,
+strong,
+small,
+li {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  html {
+    font-size: 87.5%;
+  }
+
+  body {
+    min-width: 0;
+  }
 }

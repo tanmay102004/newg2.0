@@ -216,3 +216,27 @@
     gap: 22px;
   }
 }
+
+@media (max-width: 640px) {
+  .breaking-page {
+    padding: 18px 14px 8px;
+  }
+
+  .breaking-page__hero,
+  .breaking-page__card {
+    min-width: 0;
+  }
+
+  .breaking-page__card h2 {
+    font-size: 1.28rem;
+  }
+
+  .breaking-page__read-more {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .breaking-page__sidebar {
+    display: none;
+  }
+}

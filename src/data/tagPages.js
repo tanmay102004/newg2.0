@@ -22,6 +22,8 @@ import { defaultSpecialPage } from './specialPage'
 import { defaultTechnologyPage } from './technologyPage'
 import { defaultVideshPage } from './videshPage'
 import { buildTagHref } from '../utils/articleRouting'
+import { getPublishedStorySubmissions } from '../services/storySubmissions'
+import { applySidebarStoryPlacements } from '../services/sidebarPlacements'
 
 const DEFAULT_TAG_PAGE = {
   readMoreLabel: 'Read More',
@@ -92,7 +94,7 @@ function buildTagStory(story = {}) {
   }
 }
 
-function collectPageStories(content = {}) {
+export function collectPageStories(content = {}) {
   const storyMap = new Map()
 
   const pushStory = (story) => {
@@ -128,7 +130,7 @@ function collectPageStories(content = {}) {
 }
 
 function mergeSidebar(baseSidebar = {}, overrideSidebar = {}) {
-  return {
+  return applySidebarStoryPlacements({
     relatedStories:
       overrideSidebar.relatedStories?.length
         ? overrideSidebar.relatedStories
@@ -141,7 +143,7 @@ function mergeSidebar(baseSidebar = {}, overrideSidebar = {}) {
       overrideSidebar.categories?.length
         ? overrideSidebar.categories
         : baseSidebar.categories ?? [],
-  }
+  }, getPublishedStorySubmissions())
 }
 
 function resolveSharedSidebar(content = {}) {

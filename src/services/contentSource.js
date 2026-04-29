@@ -1,6 +1,7 @@
 import { defaultArticlePages } from '../data/articlePages'
 import { homePageContent } from '../data/homePageContent'
 import { applyHomepagePlacements } from './homepagePlacements'
+import { applyPublicationIssuesToContent } from './publicationIssues'
 import { getPublishedStorySubmissions } from './storySubmissions'
 
 const CONTENT_API_URL = import.meta.env.VITE_CONTENT_API_URL?.trim()
@@ -15,7 +16,9 @@ function buildResolvedHomePageContent(baseContent, remoteContent = {}) {
     },
   }
 
-  return applyHomepagePlacements(mergedContent, getPublishedStorySubmissions())
+  return applyPublicationIssuesToContent(
+    applyHomepagePlacements(mergedContent, getPublishedStorySubmissions()),
+  )
 }
 
 export async function loadHomePageContent() {

@@ -376,9 +376,20 @@
 }
 
 @media (max-width: 640px) {
+  .video-section {
+    padding-block: 22px;
+  }
+
   .video-section__header {
     flex-direction: column;
     align-items: flex-start;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .video-section__body {
+    padding-left: 14px;
+    padding-right: 14px;
   }
 
   .video-section__item-card {

@@ -113,7 +113,33 @@ function normalizeOption(option = {}) {
   }
 }
 
+function normalizeIssuePage(page, index) {
+  if (typeof page === 'string') {
+    return {
+      id: `page-${index + 1}`,
+      imageUrl: page,
+      title: `Page ${index + 1}`,
+      pageNumber: index + 1,
+    }
+  }
+
+  return {
+    id: page.id ?? page.slug ?? `page-${index + 1}`,
+    imageUrl: page.imageUrl ?? page.pageImageUrl ?? page.url ?? page.src ?? page.fileUrl ?? '',
+    title: page.title ?? page.label ?? `Page ${page.pageNumber ?? index + 1}`,
+    pageNumber: page.pageNumber ?? page.number ?? index + 1,
+    imageAlt: page.imageAlt ?? page.alt ?? page.title ?? `Page ${index + 1}`,
+  }
+}
+
 function normalizeIssue(issue = {}) {
+  const rawPages =
+    issue.pages ??
+    issue.pageImages ??
+    issue.images ??
+    issue.imageUrls ??
+    []
+
   return {
     id: issue.id ?? `${issue.edition ?? ''}-${issue.section ?? ''}-${issue.date ?? ''}`,
     edition: issue.edition ?? issue.editionId ?? '',
@@ -125,6 +151,7 @@ function normalizeIssue(issue = {}) {
     cityLabel: issue.cityLabel ?? issue.editionLabel ?? '',
     sectionLabel: issue.sectionLabel ?? issue.sectionName ?? '',
     headline: issue.headline ?? issue.title ?? '',
+    pages: rawPages.map(normalizeIssuePage).filter((page) => page.id),
   }
 }
 
@@ -138,7 +165,9 @@ function normalizeContent(content = {}) {
     menuLabel: content.menuLabel ?? 'मेन्यू',
     editions: (content.editions ?? []).map(normalizeOption).filter((item) => item.value),
     sections: (content.sections ?? []).map(normalizeOption).filter((item) => item.value),
-    issues: (content.issues ?? []).map(normalizeIssue).filter((item) => item.id && item.pdfUrl),
+    issues: (content.issues ?? [])
+      .map(normalizeIssue)
+      .filter((item) => item.id && (item.pdfUrl || item.pages.length || item.pageCount)),
     actionLabels: {
       zoom: content.actionLabels?.zoom ?? 'Zoom',
       zoomOut: content.actionLabels?.zoomOut ?? 'Zoom Out',
@@ -165,6 +194,7 @@ function EpaperPage({ content, query, pageKey = 'epaperPage', queryKey = 'epaper
   const [selectedDate, setSelectedDate] = useState(initialDate)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [zoomLevel, setZoomLevel] = useState(100)
+  const [activePageIndex, setActivePageIndex] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isClipMode, setIsClipMode] = useState(false)
   const [clipDraft, setClipDraft] = useState(null)
@@ -267,6 +297,10 @@ function EpaperPage({ content, query, pageKey = 'epaperPage', queryKey = 'epaper
   }, [matchingIssue?.id, selectedDate, selectedSection, zoomLevel])
 
   useEffect(() => {
+    setActivePageIndex(0)
+  }, [matchingIssue?.id, selectedDate, selectedSection])
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     params.set(queryKey, '1')
 
@@ -285,15 +319,42 @@ function EpaperPage({ content, query, pageKey = 'epaperPage', queryKey = 'epaper
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
   }, [queryKey, selectedDate, selectedEdition, selectedSection])
 
-  const viewerSrc = matchingIssue
-    ? `${matchingIssue.pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&zoom=${zoomLevel}`
-    : ''
+  const issuePages = useMemo(() => {
+    if (!matchingIssue) {
+      return []
+    }
+
+    if (matchingIssue.pages.length) {
+      return matchingIssue.pages
+    }
+
+    const fallbackPageCount = Math.max(1, Number(matchingIssue.pageCount) || 1)
+
+    return Array.from({ length: fallbackPageCount }, (_, index) => ({
+      id: `placeholder-${index + 1}`,
+      imageUrl: '',
+      title: `${epaperContent.title} Page ${index + 1}`,
+      pageNumber: index + 1,
+      imageAlt: `${epaperContent.title} Page ${index + 1}`,
+    }))
+  }, [epaperContent.title, matchingIssue])
+  const activePage = issuePages[activePageIndex] ?? issuePages[0] ?? null
+  const pageTotal = issuePages.length
+
+  const goToPreviousPage = () => {
+    setActivePageIndex((index) => Math.max(0, index - 1))
+  }
+
+  const goToNextPage = () => {
+    setActivePageIndex((index) => Math.min(Math.max(0, pageTotal - 1), index + 1))
+  }
 
   const activeSelection = clipDraft ?? clipSelection
 
   const buildClipShareUrl = () => {
     const params = new URLSearchParams(window.location.search)
-    params.set('epaper', '1')
+    params.delete(queryKey === 'epaper' ? 'emagazine' : 'epaper')
+    params.set(queryKey, '1')
     if (selectedEdition) params.set('edition', selectedEdition)
     if (selectedSection) params.set('section', selectedSection)
     if (selectedDate) params.set('date', selectedDate)
@@ -641,13 +702,58 @@ function EpaperPage({ content, query, pageKey = 'epaperPage', queryKey = 'epaper
                     <div>
                       <strong>{matchingIssue.displayDate}</strong>
                     </div>
+                    <div>
+                      <span>{issuePages.length} pages</span>
+                    </div>
                   </div>
 
-                  <iframe
-                    className="epaper-page__viewer"
-                    src={viewerSrc}
-                    title={matchingIssue.headline || epaperContent.title}
-                  />
+                  <div
+                    className="epaper-page__image-viewer"
+                    style={{ '--epaper-zoom': zoomLevel / 100 }}
+                    aria-label={matchingIssue.headline || epaperContent.title}
+                  >
+                    {activePage ? (
+                      <article className="epaper-page__image-page" key={activePage.id}>
+                        {activePage.imageUrl ? (
+                          <img
+                            src={activePage.imageUrl}
+                            alt={activePage.imageAlt || activePage.title}
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="epaper-page__image-placeholder">
+                            <span>{epaperContent.title}</span>
+                            <strong>{matchingIssue.headline || matchingIssue.displayDate}</strong>
+                            <small>Page {activePage.pageNumber}</small>
+                            <p>Backend image will appear here.</p>
+                          </div>
+                        )}
+                      </article>
+                    ) : null}
+
+                    <div className="epaper-page__pager" aria-label="Page navigation">
+                      <button
+                        type="button"
+                        onClick={goToPreviousPage}
+                        disabled={activePageIndex === 0}
+                        aria-label="Previous page"
+                      >
+                        <span aria-hidden="true">‹</span>
+                      </button>
+                      <div className="epaper-page__pager-status">
+                        <strong>Page {activePageIndex + 1}</strong>
+                        <span>of {pageTotal}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={goToNextPage}
+                        disabled={activePageIndex >= pageTotal - 1}
+                        aria-label="Next page"
+                      >
+                        <span aria-hidden="true">›</span>
+                      </button>
+                    </div>
+                  </div>
 
                   {isClipMode ? (
                     <div

@@ -81,3 +81,14 @@
     font-size: 0.86rem;
   }
 }
+
+@media (max-width: 640px) {
+  .news-meta {
+    padding: 12px 14px;
+  }
+
+  .news-meta__chip {
+    min-height: 32px;
+    padding: 6px 10px;
+  }
+}

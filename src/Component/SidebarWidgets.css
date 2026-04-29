@@ -181,3 +181,17 @@
   font-size: 0.8rem;
   font-weight: 700;
 }
+
+@media (max-width: 640px) {
+  .sidebar-widgets {
+    gap: 18px;
+  }
+
+  .sidebar-widgets__related-card {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-widgets__category-count {
+    right: 12px;
+  }
+}

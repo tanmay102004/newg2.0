@@ -25,23 +25,17 @@
   gap: 18px;
 }
 
-.site-footer__logo-mark {
-  color: #ffffff;
-  font-family: var(--font-display);
-  font-size: 3.2rem;
-  font-weight: 700;
-  line-height: 1;
+.site-footer__brand-logo {
+  display: block;
+  width: auto;
+  height: 100px;
+  object-fit: contain;
 }
 
 .site-footer__brand-copy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-}
-
-.site-footer__brand-copy strong {
-  font-size: 2rem;
-  font-weight: 800;
+  gap: 4px;
 }
 
 .site-footer__brand-copy span {
@@ -257,24 +251,209 @@
 
 @media (max-width: 760px) {
   .site-footer {
-    padding: 0 18px 26px;
+    margin-top: 24px;
+    padding: 0 18px 24px;
   }
 
   .site-footer__top-line {
+    height: 8px;
     margin-inline: -18px;
+    margin-bottom: 14px;
   }
 
   .site-footer__header {
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px 0 18px;
   }
 
   .site-footer__social {
-    flex-direction: column;
-    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .site-footer__brand {
+    gap: 12px;
+  }
+
+  .site-footer__brand-logo {
+    height: 50px;
+  }
+
+  .site-footer__brand-copy span {
+    font-size: 0.9rem;
+  }
+
+  .site-footer__social-label {
+    font-size: 1.15rem;
+  }
+
+  .site-footer__social-link {
+    width: 34px;
+    height: 34px;
+    border-radius: 7px;
+  }
+
+  .site-footer__body {
+    gap: 22px;
+    padding: 22px 0 8px;
+  }
+
+  .site-footer__about p {
+    font-size: 0.9rem;
+    line-height: 1.65;
   }
 
   .site-footer__nav {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .site-footer__column li + li {
+    margin-top: 8px;
+  }
+
+  .site-footer__column a {
+    font-size: 0.84rem;
+    line-height: 1.25;
+  }
+
+  .site-footer__promo {
+    gap: 16px;
+    max-width: 100%;
+  }
+
+  .site-footer__promo-card {
+    grid-template-columns: minmax(0, 1fr) 72px;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .site-footer__promo-copy {
+    gap: 5px;
+  }
+
+  .site-footer__promo-copy span {
+    font-size: 0.76rem;
+  }
+
+  .site-footer__promo-copy strong {
+    font-size: 1rem;
+  }
+
+  .site-footer__promo-copy p {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+
+  .site-footer__promo-qr {
+    border-radius: 11px;
+  }
+
+  .site-footer__apps {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .site-footer__apps span {
+    font-size: 1rem;
+  }
+
+  .site-footer__app-link {
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+  }
+}
+
+@media (max-width: 640px) {
+  .site-footer {
+    padding: 0 14px 24px;
+  }
+
+  .site-footer__top-line {
+    margin-inline: -14px;
+  }
+
+  .site-footer__header {
+    gap: 14px;
+  }
+
+  .site-footer__social {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .site-footer__social-links {
+    gap: 8px;
+  }
+
+  .site-footer__nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .site-footer__promo-card {
+    grid-template-columns: minmax(0, 1fr) 62px;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .site-footer__promo-copy strong {
+    font-size: 0.92rem;
+  }
+
+  .site-footer__promo-copy p {
+    -webkit-line-clamp: 1;
+    font-size: 0.72rem;
+  }
+
+  .site-footer__apps,
+  .site-footer__app-links {
+    align-items: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .site-footer__brand {
+    align-items: flex-start;
+  }
+
+  .site-footer__brand-logo {
+    height: 42px;
+  }
+
+  .site-footer__logo-mark {
+    font-size: 1.8rem;
+  }
+
+  .site-footer__brand-copy strong {
+    font-size: 1.12rem;
+  }
+
+  .site-footer__nav {
+    gap: 10px;
+  }
+
+  .site-footer__column a {
+    font-size: 0.76rem;
+  }
+
+  .site-footer__promo-card {
+    grid-template-columns: minmax(0, 1fr) 54px;
+  }
+
+  .site-footer__app-link {
+    width: 38px;
+    height: 38px;
   }
 }

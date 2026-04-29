@@ -43,3 +43,14 @@
     padding-inline: 18px;
   }
 }
+
+@media (max-width: 640px) {
+  .category-strip {
+    padding: 0 14px 24px;
+    gap: 14px;
+  }
+
+  .category-strip__card {
+    padding: 18px;
+  }
+}

@@ -4,3 +4,13 @@
   font-size: 0.98rem;
   line-height: 1.6;
 }
+
+@media (max-width: 640px) {
+  .author-page__header {
+    padding-inline: 14px;
+  }
+
+  .author-page__header p {
+    font-size: 0.94rem;
+  }
+}
